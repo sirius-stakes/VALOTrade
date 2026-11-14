@@ -37,7 +37,7 @@
 ---
 
 ## Phase 3: マルチタイトル＆全機能対応のDBスキーマ拡張
-- [ ] **Phase 3-1: Prismaスキーマの拡張とマイグレーション**
+- [x] **Phase 3-1: Prismaスキーマの拡張とマイグレーション**
   - `Game`（VALORANT / LoL / IdentityV）、`Region`、`Player.role`（タイトル別ロール）、`Player.staffCategory`（PLAYER / COACH / STAFF）、`Player.nationality` をスキーマに追加。
   - 新規モデル追加：`Standing`（公式リーグ順位・勝敗・ポイント）、`TeamAchievement`（過去大会実績）、`TeamMatch`（直近結果・次戦予定・`streamUrl`）。
 

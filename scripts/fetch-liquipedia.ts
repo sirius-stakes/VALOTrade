@@ -17,11 +17,16 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { PrismaClient, type PlayerStatus, type TransferType } from "@prisma/client";
+import {
+  PrismaClient,
+  type PlayerStatus,
+  type StaffCategory,
+  type TransferType,
+} from "@prisma/client";
 import { load, type Cheerio, type CheerioAPI } from "cheerio";
 import type { AnyNode } from "domhandler";
 
-import { isRosterRole } from "../src/lib/roles";
+import { getRosterCategory, isRosterRole } from "../src/lib/roles";
 import {
   TARGET_TEAMS,
   type TargetTeamDefinition,
@@ -69,6 +74,7 @@ type RosterEntry = {
   role: string;
   status: PlayerStatus;
   country: string | null;
+  nationality: string | null;
   /** Liquipedia の Join Date（YYYY-MM-DD）。不明なら null。 */
   startDate: string | null;
   /** Leave Date / Inactive Date（YYYY-MM-DD）。不明なら null。 */
@@ -603,12 +609,15 @@ function parseTableBlock(
       status !== "FA" &&
       !endDate;
 
+    const country = extractCountry($, playerCell);
+
     entries.push({
       handle,
       realName,
       role: role || "Player",
       status,
-      country: extractCountry($, playerCell),
+      country,
+      nationality: country,
       startDate,
       endDate,
       isCurrent,
@@ -665,12 +674,15 @@ export function parseTeamRosterHtml(
       const rowText = clean(rowNode.text());
       const status = resolveStatus("active", role, rowText);
 
+      const country = extractCountry($, scope);
+
       entries.push({
         handle,
         realName: null,
         role: resolveRole("active", role),
         status,
-        country: extractCountry($, scope),
+        country,
+        nationality: country,
         startDate: null,
         endDate: null,
         isCurrent: status === "ACTIVE" || status === "SUB",
@@ -1044,6 +1056,9 @@ type PlayerCache = Map<
     handle: string;
     realName: string | null;
     country: string | null;
+    nationality: string | null;
+    role: string | null;
+    staffCategory: StaffCategory | null;
     status: PlayerStatus;
   }
 >;
@@ -1056,6 +1071,9 @@ async function loadPlayerCache(gameId: string): Promise<PlayerCache> {
       handle: true,
       realName: true,
       country: true,
+      nationality: true,
+      role: true,
+      staffCategory: true,
       status: true,
     },
   });
@@ -1100,11 +1118,15 @@ async function ensurePlayer(
 ) {
   const key = entry.handle.toLowerCase();
   const cached = cache.get(key);
+  const staffCategory = getRosterCategory(entry.role);
 
   if (cached) {
     const data: {
       realName?: string;
       country?: string;
+      nationality?: string;
+      role?: string;
+      staffCategory?: StaffCategory;
       status?: PlayerStatus;
     } = {};
 
@@ -1113,6 +1135,15 @@ async function ensurePlayer(
     }
     if (entry.country && !cached.country) {
       data.country = entry.country;
+    }
+    if (entry.nationality && !cached.nationality) {
+      data.nationality = entry.nationality;
+    }
+    if (entry.role && entry.role !== cached.role) {
+      data.role = entry.role;
+    }
+    if (staffCategory !== cached.staffCategory) {
+      data.staffCategory = staffCategory;
     }
     if (entry.isCurrent && entry.status !== cached.status) {
       data.status = entry.status;
@@ -1125,6 +1156,9 @@ async function ensurePlayer(
       });
       cached.realName = updated.realName;
       cached.country = updated.country;
+      cached.nationality = updated.nationality;
+      cached.role = updated.role;
+      cached.staffCategory = updated.staffCategory;
       cached.status = updated.status;
       stats.playersUpdated += 1;
     }
@@ -1138,7 +1172,10 @@ async function ensurePlayer(
       regionId: context.region.id,
       handle: entry.handle,
       realName: entry.realName,
+      role: entry.role,
+      staffCategory,
       country: entry.country ?? "JP",
+      nationality: entry.nationality ?? entry.country ?? "JP",
       status: entry.status,
       note: "Liquipedia MediaWiki API から自動取得",
     },
@@ -1155,6 +1192,9 @@ function updatedCacheEntry(player: {
   handle: string;
   realName: string | null;
   country: string | null;
+  nationality: string | null;
+  role: string | null;
+  staffCategory: StaffCategory | null;
   status: PlayerStatus;
 }) {
   return {
@@ -1162,6 +1202,9 @@ function updatedCacheEntry(player: {
     handle: player.handle,
     realName: player.realName,
     country: player.country,
+    nationality: player.nationality,
+    role: player.role,
+    staffCategory: player.staffCategory,
     status: player.status,
   };
 }

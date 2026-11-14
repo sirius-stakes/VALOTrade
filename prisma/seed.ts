@@ -1,5 +1,7 @@
 import { PrismaClient, type PlayerStatus } from "@prisma/client";
 
+import { getRosterCategory } from "@/lib/roles";
+
 process.env.DATABASE_URL ??= "file:./dev.db";
 
 const prisma = new PrismaClient();
@@ -407,6 +409,8 @@ async function main() {
     if (!teamRecord) continue;
 
     for (const player of team.roster) {
+      const category = getRosterCategory(player.role);
+
       await prisma.player.create({
         data: {
           gameId: game.id,
@@ -414,7 +418,10 @@ async function main() {
           handle: player.handle,
           realName: player.realName,
           status: player.status,
+          role: player.role,
+          staffCategory: category,
           country: "JP",
+          nationality: "JP",
           xUrl:
             player.xUrl ??
             `https://x.com/valo_${player.handle.toLowerCase()}`,

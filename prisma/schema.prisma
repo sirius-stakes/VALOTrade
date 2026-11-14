@@ -25,6 +25,7 @@ model Game {
   teams          Team[]
   players        Player[]
   transferEvents TransferEvent[]
+  standings      Standing[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -37,8 +38,9 @@ model Region {
   name      String
   sortOrder Int    @default(0)
 
-  teams   Team[]
-  players Player[]
+  teams     Team[]
+  players   Player[]
+  standings Standing[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -58,9 +60,12 @@ model Team {
   isActive    Boolean @default(true)
   sortOrder   Int     @default(0)
 
-  game        Game                @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  region      Region              @relation(fields: [regionId], references: [id])
-  memberships MembershipHistory[]
+  game         Game                @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  region       Region              @relation(fields: [regionId], references: [id])
+  memberships  MembershipHistory[]
+  achievements TeamAchievement[]
+  matches      TeamMatch[]
+  standings    Standing[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -81,18 +86,38 @@ enum PlayerStatus {
   INACTIVE
 }
 
+/// 選手 / コーチ / スタッフの区分。UI 側の表示制御や取得対象の絞り込みに使用。
+enum StaffCategory {
+  PLAYER
+  COACH
+  STAFF
+}
+
+/// 試合の状態。直近の結果か、今後の予定か。
+enum MatchStatus {
+  RECENT
+  UPCOMING
+}
+
 model Player {
-  id          String       @id @default(cuid())
-  gameId      String
-  regionId    String?
-  handle      String
-  realName    String?
-  status      PlayerStatus @default(ACTIVE)
-  country     String?      @default("JP")
-  xUrl        String?
-  officialUrl String?
-  avatarUrl   String?
-  note        String?
+  id            String         @id @default(cuid())
+  gameId        String
+  regionId      String?
+  handle        String
+  realName      String?
+  status        PlayerStatus   @default(ACTIVE)
+  /// タイトル別の主なロール（VALORANT なら Duelist / Controller など）。
+  role          String?
+  /// 選手 / コーチ / スタッフの区分。
+  staffCategory StaffCategory?
+  /// 旧フィールド。nationality への移行期間中に両方保持。
+  country       String?        @default("JP")
+  /// 国籍（ISO コードまたは国名）。
+  nationality   String?        @default("JP")
+  xUrl          String?
+  officialUrl   String?
+  avatarUrl     String?
+  note          String?
 
   game        Game                @relation(fields: [gameId], references: [id], onDelete: Cascade)
   region      Region?             @relation(fields: [regionId], references: [id])
@@ -105,6 +130,7 @@ model Player {
   @@unique([gameId, handle])
   @@index([gameId])
   @@index([status])
+  @@index([staffCategory])
 }
 
 /// 移籍・契約の履歴。isCurrent=true かつ endDate=null が現所属。
@@ -180,6 +206,81 @@ model TransferEvent {
   @@index([gameId, eventDate])
   @@index([playerId])
   @@index([type])
+}
+
+/// 公式リーグ順位表。勝敗とポイントを保持。
+model Standing {
+  id        String @id @default(cuid())
+  gameId    String
+  regionId  String?
+  teamId    String?
+  season    String?
+  split     String?
+  rank      Int
+  wins      Int     @default(0)
+  losses    Int     @default(0)
+  points    Int?
+  tiebreaker String?
+
+  game   Game  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  region Region? @relation(fields: [regionId], references: [id])
+  team   Team? @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([gameId])
+  @@index([regionId])
+  @@index([teamId])
+  @@index([gameId, season, split, rank])
+}
+
+/// チームの過去大会実績。
+model TeamAchievement {
+  id          String  @id @default(cuid())
+  teamId      String
+  /// 大会のティア（S / A / Major / Minor など）。
+  tier        String
+  tournament  String
+  /// 順位（1st / 2nd / 3-4th など）。
+  placement   String
+  prize       String?
+  /// 開催日または終了日（YYYY-MM-DD）。
+  date        String
+  sourceUrl   String?
+  sourceTitle String?
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teamId])
+  @@index([teamId, date])
+}
+
+/// チームの直近試合結果・次戦予定。
+model TeamMatch {
+  id                   String      @id @default(cuid())
+  teamId               String
+  opponentTeamName     String
+  opponentTeamShortName String?
+  opponentTeamLogoUrl  String?
+  /// true=勝利 / false=敗北 / null=未定（予定）。
+  isWin                Boolean?
+  score                String?
+  /// 試合日（YYYY-MM-DD）。
+  date                 String
+  streamUrl            String?
+  status               MatchStatus
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teamId])
+  @@index([teamId, status, date])
 }
 
 /// `npm run update` の実行履歴。ヘッダーの最終更新日時に使用。

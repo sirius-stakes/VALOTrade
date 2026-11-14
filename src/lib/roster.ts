@@ -24,7 +24,10 @@ type PlayerWithMemberships = {
   handle: string;
   realName: string | null;
   status: PlayerStatus;
+  role: string | null;
+  staffCategory: import("@prisma/client").StaffCategory | null;
   country: string | null;
+  nationality: string | null;
   xUrl: string | null;
   officialUrl: string | null;
   avatarUrl: string | null;
@@ -74,13 +77,16 @@ function mapPlayer(player: PlayerWithMemberships): PlayerDto {
   const current = memberships.find((membership) => membership.isCurrent) ?? null;
   const primaryRole = current?.role ?? memberships[0]?.role ?? null;
 
+  const staffCategory =
+    player.staffCategory ?? getRosterCategory(primaryRole);
+
   return {
     id: player.id,
     handle: player.handle,
     realName: player.realName,
     status: player.status,
-    category: getRosterCategory(primaryRole),
-    country: player.country,
+    category: staffCategory,
+    country: player.country ?? player.nationality,
     regionCode: player.region?.code ?? null,
     xUrl: player.xUrl,
     officialUrl: player.officialUrl,
@@ -91,7 +97,7 @@ function mapPlayer(player: PlayerWithMemberships): PlayerDto {
     currentTeamLogoUrl: current?.teamLogoUrl ?? null,
     currentTeamAccent: current?.teamAccent ?? null,
     currentTeamOfficialUrl: current?.teamOfficialUrl ?? null,
-    currentRole: current?.role ?? null,
+    currentRole: current?.role ?? player.role ?? null,
     memberships,
   };
 }
