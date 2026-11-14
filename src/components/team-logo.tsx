@@ -40,7 +40,7 @@ export function TeamLogo({
   return (
     <span
       className={cn(
-        "relative inline-flex shrink-0 items-center justify-center overflow-hidden border border-white/10 bg-[#0b1018] ring-1",
+        "relative inline-flex shrink-0 items-center justify-center overflow-hidden border border-zinc-800/80 bg-zinc-900 ring-1",
         accentMeta.ring,
         SIZE_CLASS[size],
         className,

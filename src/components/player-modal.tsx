@@ -35,7 +35,7 @@ type PlayerModalProps = {
 };
 
 const linkClassName =
-  "inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[11px] font-medium text-zinc-300 transition-colors hover:border-white/25 hover:bg-white/[0.07] hover:text-white";
+  "inline-flex items-center gap-1.5 rounded-md border border-zinc-700/70 bg-zinc-900/50 px-2.5 py-1.5 text-[11px] font-medium text-zinc-300 transition-colors hover:border-zinc-600 hover:bg-zinc-800/60 hover:text-white";
 
 export function PlayerModal({ player, open, onOpenChange }: PlayerModalProps) {
   if (!player) {
@@ -52,7 +52,7 @@ export function PlayerModal({ player, open, onOpenChange }: PlayerModalProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent aria-describedby="player-modal-description">
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <DialogHeader className="sticky top-0 z-20 overflow-hidden border-b border-white/[0.07] bg-[#080b11]/95 bg-gradient-to-b from-white/[0.045] to-transparent px-6 pb-6 pt-7 pr-14 backdrop-blur-xl">
+          <DialogHeader className="sticky top-0 z-20 overflow-hidden border-b border-zinc-800/70 bg-zinc-950/95 bg-gradient-to-b from-zinc-900/60 to-transparent px-6 pb-6 pt-7 pr-14 backdrop-blur-xl">
             <span
               className={cn(
                 "pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full bg-gradient-to-br opacity-20 blur-3xl",
@@ -133,7 +133,7 @@ export function PlayerModal({ player, open, onOpenChange }: PlayerModalProps) {
                   rel="noreferrer"
                   className={cn(
                     linkClassName,
-                    "border-red-400/20 bg-red-400/[0.06] text-red-200 hover:border-red-400/40 hover:bg-red-400/[0.1]",
+                    "border-brand/25 bg-brand/[0.06] text-brand hover:border-brand/45 hover:bg-brand/[0.1]",
                   )}
                 >
                   <Trophy className="h-3.5 w-3.5" />
@@ -170,7 +170,7 @@ export function PlayerModal({ player, open, onOpenChange }: PlayerModalProps) {
               />
             </section>
 
-            <section className="rounded-lg border border-white/[0.07] bg-white/[0.02] p-3.5">
+            <section className="rounded-lg border border-zinc-800/70 bg-zinc-900/35 p-3.5">
               <div className="flex items-center gap-3">
                 {current ? (
                   <>
@@ -225,7 +225,7 @@ export function PlayerModal({ player, open, onOpenChange }: PlayerModalProps) {
             </section>
 
             {player.note ? (
-              <p className="rounded-lg border-l-2 border-red-400/40 bg-red-400/[0.035] px-3.5 py-3 text-xs leading-relaxed text-zinc-400">
+              <p className="rounded-lg border-l-2 border-brand/40 bg-brand/[0.035] px-3.5 py-3 text-xs leading-relaxed text-zinc-400">
                 {player.note}
               </p>
             ) : null}
@@ -240,7 +240,7 @@ export function PlayerModal({ player, open, onOpenChange }: PlayerModalProps) {
                     最新の所属が上。各ブロックから公式発表を確認できます。
                   </p>
                 </div>
-                <span className="shrink-0 whitespace-nowrap rounded-full border border-white/10 px-2 py-0.5 font-mono text-[10px] text-zinc-500">
+                <span className="shrink-0 whitespace-nowrap rounded-full border border-zinc-700/70 px-2 py-0.5 font-mono text-[10px] text-zinc-500">
                   {player.memberships.length} records
                 </span>
               </div>
@@ -257,7 +257,7 @@ export function PlayerModal({ player, open, onOpenChange }: PlayerModalProps) {
                         className="relative flex gap-3.5 pb-5 last:pb-0"
                       >
                         {!isLast ? (
-                          <span className="absolute bottom-0 left-[21px] top-11 w-px bg-gradient-to-b from-white/15 via-white/[0.07] to-transparent" />
+                          <span className="absolute bottom-0 left-[21px] top-11 w-px bg-gradient-to-b from-zinc-700/60 via-zinc-800/60 to-transparent" />
                         ) : null}
 
                         <div className="relative z-10 mt-0.5">
@@ -270,7 +270,7 @@ export function PlayerModal({ player, open, onOpenChange }: PlayerModalProps) {
                           {membership.isCurrent ? (
                             <span
                               className={cn(
-                                "absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-[#080b11]",
+                                "absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-zinc-950",
                                 accent.line,
                               )}
                             />
@@ -281,8 +281,8 @@ export function PlayerModal({ player, open, onOpenChange }: PlayerModalProps) {
                           className={cn(
                             "min-w-0 flex-1 rounded-lg border p-3 transition-colors",
                             membership.isCurrent
-                              ? "border-white/[0.12] bg-white/[0.04]"
-                              : "border-white/[0.06] bg-white/[0.015]",
+                              ? "border-zinc-700/70 bg-zinc-900/60"
+                              : "border-zinc-800/70 bg-zinc-900/25",
                           )}
                         >
                           <div className="flex items-start justify-between gap-2">
@@ -310,7 +310,7 @@ export function PlayerModal({ player, open, onOpenChange }: PlayerModalProps) {
                             <RoleTag role={membership.role} />
                           </div>
 
-                          <div className="mt-2 flex items-center justify-between gap-2 border-t border-white/[0.05] pt-2">
+                          <div className="mt-2 flex items-center justify-between gap-2 border-t border-zinc-800/60 pt-2">
                             <span className="inline-flex items-center gap-1 text-[10px] text-zinc-600">
                               <Link2 className="h-3 w-3" />
                               {membership.isCurrent ? "現所属" : "過去の所属"}
@@ -337,7 +337,7 @@ export function PlayerModal({ player, open, onOpenChange }: PlayerModalProps) {
                   })}
                 </ol>
               ) : (
-                <div className="mt-5 flex flex-col items-center gap-2 rounded-lg border border-dashed border-white/10 px-4 py-10 text-center">
+                <div className="mt-5 flex flex-col items-center gap-2 rounded-lg border border-dashed border-zinc-800/80 px-4 py-10 text-center">
                   <CalendarRange className="h-5 w-5 text-zinc-700" />
                   <p className="text-xs text-zinc-600">
                     所属履歴がまだ登録されていません
@@ -348,7 +348,7 @@ export function PlayerModal({ player, open, onOpenChange }: PlayerModalProps) {
           </div>
         </div>
 
-        <footer className="border-t border-white/[0.07] bg-black/20 px-6 py-3">
+        <footer className="border-t border-zinc-800/70 bg-zinc-950/40 px-6 py-3">
           <p className="flex items-center gap-1.5 text-[10px] text-zinc-600">
             <ShieldCheck className="h-3 w-3" />
             ローカル SQLite に保存された記録です。外部送信は行いません。
@@ -373,7 +373,7 @@ function Stat({
   small?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2.5">
+    <div className="rounded-lg border border-zinc-800/70 bg-zinc-900/35 px-3 py-2.5">
       <p className="flex items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.14em] text-zinc-600">
         {icon}
         {label}

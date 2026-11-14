@@ -17,11 +17,11 @@ const STEPS = [
 export function SetupScreen({ message }: SetupScreenProps) {
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col justify-center px-6 py-16">
-      <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-7 sm:p-10">
-        <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-red-400/25 bg-red-400/[0.07] text-red-300">
+      <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-7 sm:p-10">
+        <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-brand/25 bg-brand/[0.07] text-brand">
           <Database className="h-6 w-6" />
         </span>
-        <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.3em] text-red-300/80">
+        <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.3em] text-brand/80">
           Local Setup Required
         </p>
         <h1 className="mt-2 font-display text-2xl font-black tracking-wide text-white sm:text-3xl">
@@ -43,9 +43,9 @@ export function SetupScreen({ message }: SetupScreenProps) {
           {STEPS.map((step, index) => (
             <li
               key={step.command}
-              className="flex items-start gap-3 rounded-lg border border-white/[0.06] bg-black/25 p-3"
+              className="flex items-start gap-3 rounded-lg border border-zinc-800/70 bg-zinc-950/40 p-3"
             >
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/10 font-mono text-[10px] text-zinc-500">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-zinc-700/70 font-mono text-[10px] text-zinc-500">
                 {index + 1}
               </span>
               <div className="min-w-0">
@@ -61,7 +61,7 @@ export function SetupScreen({ message }: SetupScreenProps) {
           ))}
         </ol>
 
-        <p className="mt-6 border-t border-white/[0.06] pt-4 text-[10px] leading-relaxed text-zinc-600">
+        <p className="mt-6 border-t border-zinc-800/70 pt-4 text-[10px] leading-relaxed text-zinc-600">
           データを初期状態に戻す場合: <code className="text-zinc-400">npm run db:reset</code>
           <br />
           ロスター情報の再取得: <code className="text-zinc-400">npm run update</code>

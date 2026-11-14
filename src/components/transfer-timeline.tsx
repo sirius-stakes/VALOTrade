@@ -47,7 +47,7 @@ export function TransferTimeline({
 
   return (
     <div className="mx-auto max-w-4xl">
-      <ol className="relative ml-[7px] border-l border-white/[0.08] sm:ml-3">
+      <ol className="relative ml-[7px] border-l border-zinc-800/80 sm:ml-3">
         {events.map((event) => {
           const meta = TRANSFER_META[event.type];
           const Icon = EVENT_ICONS[event.type];
@@ -59,7 +59,7 @@ export function TransferTimeline({
             <li key={event.id} className="relative pb-3.5 pl-5 sm:pl-7">
               <span
                 className={cn(
-                  "absolute -left-[5px] top-6 h-[9px] w-[9px] rounded-full ring-4 ring-[#070a0f]",
+                  "absolute -left-[5px] top-6 h-[9px] w-[9px] rounded-full ring-4 ring-[#09090b]",
                   meta.dotClassName,
                   (event.type === "LFT" || event.type === "FA") &&
                     "animate-pulse-soft",
@@ -72,7 +72,7 @@ export function TransferTimeline({
                 )}
               />
 
-              <article className="group relative overflow-hidden rounded-xl border border-white/[0.07] bg-gradient-to-b from-white/[0.04] to-white/[0.012] px-3.5 py-3 transition-colors hover:border-white/[0.14] sm:px-4">
+              <article className="group relative overflow-hidden rounded-xl border border-zinc-800/80 bg-zinc-900/40 px-3.5 py-3 transition-colors hover:border-zinc-700/90 hover:bg-zinc-900/55 sm:px-4">
                 <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
                   <span
                     className={cn(
@@ -103,7 +103,7 @@ export function TransferTimeline({
                       <button
                         type="button"
                         onClick={() => onSelectPlayer(player)}
-                        className="group/player inline-flex items-center gap-1 text-left font-display text-[15px] font-bold tracking-wide text-zinc-100 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30"
+                        className="group/player inline-flex items-center gap-1 text-left font-display text-[15px] font-bold tracking-wide text-zinc-100 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
                       >
                         {event.playerHandle}
                         <ArrowRight className="h-3 w-3 -translate-x-1 text-zinc-600 opacity-0 transition-all group-hover/player:translate-x-0 group-hover/player:opacity-100" />
@@ -136,7 +136,7 @@ export function TransferTimeline({
                 </div>
 
                 {event.sourceUrl ? (
-                  <div className="mt-2 flex items-center justify-end border-t border-white/[0.04] pt-2">
+                  <div className="mt-2 flex items-center justify-end border-t border-zinc-800/60 pt-2">
                     <a
                       href={event.sourceUrl}
                       target="_blank"
@@ -176,10 +176,10 @@ function TeamChip({
         "max-w-[150px] truncate rounded-md border px-2 py-1 text-[10.5px] font-medium",
         name
           ? muted
-            ? "border-white/[0.07] bg-black/20 text-zinc-500"
-            : "border-white/[0.12] bg-white/[0.045] text-zinc-200"
+            ? "border-zinc-800/70 bg-zinc-950/40 text-zinc-500"
+            : "border-zinc-700/70 bg-zinc-800/40 text-zinc-200"
           : cn(
-              "border-white/[0.08] bg-white/[0.02] text-zinc-500",
+              "border-zinc-800/80 bg-zinc-950/40 text-zinc-500",
               fallbackClassName,
             ),
       )}

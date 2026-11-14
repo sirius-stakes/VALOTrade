@@ -22,10 +22,10 @@ export function FreeAgentCard({ player, onSelect }: FreeAgentCardProps) {
       type="button"
       onClick={() => onSelect(player)}
       className={cn(
-        "group relative flex w-full items-start gap-3 overflow-hidden rounded-xl border bg-gradient-to-br p-4 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30",
+        "group relative flex w-full items-start gap-3 overflow-hidden rounded-xl border bg-zinc-900/40 p-4 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30",
         isLft
-          ? "border-amber-400/15 from-amber-400/[0.07] to-white/[0.015] hover:border-amber-400/35"
-          : "border-purple-400/15 from-purple-400/[0.07] to-white/[0.015] hover:border-purple-400/35",
+          ? "border-amber-400/20 hover:border-amber-400/40 hover:bg-zinc-900/55"
+          : "border-purple-400/20 hover:border-purple-400/40 hover:bg-zinc-900/55",
       )}
     >
       <span
@@ -58,7 +58,7 @@ export function FreeAgentCard({ player, onSelect }: FreeAgentCardProps) {
         ) : null}
 
         {latest ? (
-          <div className="mt-2.5 flex flex-wrap items-center gap-2 rounded-lg border border-white/[0.06] bg-black/20 px-2 py-1.5">
+          <div className="mt-2.5 flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-2 py-1.5">
             <TeamLogo
               logoUrl={latest.teamLogoUrl}
               shortName={latest.teamShortName}

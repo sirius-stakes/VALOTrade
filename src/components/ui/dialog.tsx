@@ -35,13 +35,13 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed right-0 top-0 z-50 flex h-full w-full max-w-xl flex-col border-l border-white/10 bg-[#080b11] shadow-[0_0_80px_rgba(0,0,0,0.75)] outline-none data-[state=open]:animate-slide-in-right sm:max-w-[560px]",
+        "fixed right-0 top-0 z-50 flex h-full w-full max-w-xl flex-col border-l border-zinc-800/80 bg-zinc-950 shadow-[0_0_80px_rgba(0,0,0,0.75)] outline-none data-[state=open]:animate-slide-in-right sm:max-w-[560px]",
         className,
       )}
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 z-30 rounded-md border border-white/10 bg-black/30 p-1.5 text-zinc-400 backdrop-blur transition-colors hover:border-white/20 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/40">
+      <DialogPrimitive.Close className="absolute right-4 top-4 z-30 rounded-md border border-zinc-700/70 bg-black/30 p-1.5 text-zinc-400 backdrop-blur transition-colors hover:border-zinc-600 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40">
         <X className="h-4 w-4" />
         <span className="sr-only">閉じる</span>
       </DialogPrimitive.Close>

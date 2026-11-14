@@ -51,7 +51,7 @@ export function RoleTag({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded border border-white/[0.07] bg-white/[0.035] px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-zinc-400",
+        "inline-flex items-center rounded border border-zinc-800/70 bg-zinc-900/40 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-zinc-400",
         className,
       )}
     >

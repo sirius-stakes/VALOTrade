@@ -2,11 +2,7 @@ import type { Config } from "tailwindcss";
 
 const config: Config = {
   darkMode: ["class"],
-  content: [
-    "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
-  ],
+  content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
   theme: {
     container: {
       center: true,
@@ -17,6 +13,11 @@ const config: Config = {
     },
     extend: {
       colors: {
+        brand: {
+          DEFAULT: "rgb(var(--brand-rgb) / <alpha-value>)",
+          strong: "rgb(var(--brand-strong-rgb) / <alpha-value>)",
+          alt: "rgb(var(--brand-alt-rgb) / <alpha-value>)",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

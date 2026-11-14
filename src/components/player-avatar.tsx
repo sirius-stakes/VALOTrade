@@ -39,7 +39,7 @@ export function PlayerAvatar({
   return (
     <span
       className={cn(
-        "relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-gradient-to-br font-display font-black uppercase tracking-tight",
+        "relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-zinc-800/70 bg-gradient-to-br font-display font-black uppercase tracking-tight",
         gradientFor(handle),
         SIZE_CLASS[size],
         className,

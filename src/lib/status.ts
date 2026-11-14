@@ -1,7 +1,6 @@
 import type { PlayerStatus, TransferType } from "@prisma/client";
 
 export type StatusFilter = "all" | "free" | "active";
-export type ViewMode = "teams" | "transfers";
 
 export const PLAYER_STATUS_ORDER: PlayerStatus[] = [
   "ACTIVE",

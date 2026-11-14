@@ -4,8 +4,10 @@ import { useMemo, useState, type ReactNode } from "react";
 import {
   Activity,
   Database,
-  Shield,
+  Layers,
   SearchX,
+  Shield,
+  Trophy,
   UserRoundSearch,
   Users,
 } from "lucide-react";
@@ -14,15 +16,29 @@ import { AppHeader } from "@/components/app-header";
 import { ControlBar } from "@/components/control-bar";
 import { FreeAgentCard } from "@/components/free-agent-card";
 import { PlayerModal } from "@/components/player-modal";
+import { SectionNav } from "@/components/section-nav";
+import { SectionPlaceholder } from "@/components/section-placeholder";
 import { TeamCard } from "@/components/team-card";
 import { TransferTimeline } from "@/components/transfer-timeline";
 import { Button } from "@/components/ui/button";
-import type { StatusFilter, ViewMode } from "@/lib/status";
+import {
+  DASHBOARD_SECTIONS,
+  getGameDefinition,
+  type DashboardSection,
+} from "@/lib/games";
+import type { StatusFilter } from "@/lib/status";
 import type { DashboardData, PlayerDto } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type DashboardProps = {
   data: DashboardData;
+};
+
+const COUNT_UNIT: Record<DashboardSection, string> = {
+  roster: "players",
+  standings: "rows",
+  transfers: "events",
+  lft: "players",
 };
 
 function matchesQuery(value: string | null | undefined, query: string) {
@@ -49,25 +65,40 @@ function playerMatchesQuery(player: PlayerDto, query: string) {
 }
 
 export function Dashboard({ data }: DashboardProps) {
+  const [gameSlug, setGameSlug] = useState(data.game.slug);
+  const [section, setSection] = useState<DashboardSection>("roster");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [view, setView] = useState<ViewMode>("teams");
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerDto | null>(null);
 
+  const game = getGameDefinition(gameSlug);
+  const hasGameData = game.hasLocalData && game.slug === data.game.slug;
+  const sectionMeta =
+    DASHBOARD_SECTIONS.find((item) => item.key === section) ??
+    DASHBOARD_SECTIONS[0];
+  const isStandings = section === "standings";
   const normalizedQuery = query.trim().toLowerCase();
 
-  const handleStatusFilterChange = (next: StatusFilter) => {
-    setStatusFilter(next);
+  const handleGameChange = (nextSlug: string) => {
+    if (nextSlug === gameSlug) return;
+    setGameSlug(nextSlug);
+    setSection("roster");
+    setStatusFilter("all");
+    setQuery("");
+    setSelectedPlayer(null);
   };
 
-  const handleViewChange = (next: ViewMode) => {
-    setView(next);
+  const handleSectionChange = (next: DashboardSection) => {
+    setSection(next);
+    setStatusFilter("all");
+    setQuery("");
+    setSelectedPlayer(null);
   };
 
   const resetFilters = () => {
     setQuery("");
     setStatusFilter("all");
-    setView("teams");
+    setSection("roster");
   };
 
   const filteredTeams = useMemo(() => {
@@ -84,7 +115,11 @@ export function Dashboard({ data }: DashboardProps) {
           if (statusFilter === "active" && player.status !== "ACTIVE") {
             return false;
           }
-          if (statusFilter === "free") {
+          if (
+            statusFilter === "free" &&
+            player.status !== "LFT" &&
+            player.status !== "FA"
+          ) {
             return false;
           }
           return (
@@ -100,14 +135,12 @@ export function Dashboard({ data }: DashboardProps) {
   }, [data.teams, normalizedQuery, statusFilter]);
 
   const filteredFreeAgents = useMemo(() => {
-    if (statusFilter === "active") return [];
-
     return data.freeAgents.filter(
       (player) =>
         normalizedQuery.length === 0 ||
         playerMatchesQuery(player, normalizedQuery),
     );
-  }, [data.freeAgents, normalizedQuery, statusFilter]);
+  }, [data.freeAgents, normalizedQuery]);
 
   const filteredTransfers = useMemo(() => {
     return data.transfers.filter((event) => {
@@ -135,125 +168,189 @@ export function Dashboard({ data }: DashboardProps) {
     });
   }, [data.transfers, normalizedQuery, statusFilter]);
 
-  const showsFreeAgentList = view === "teams" && statusFilter === "free";
+  const showsFreeAgentList = section === "lft";
 
   const visibleCount =
-    view === "transfers"
-      ? filteredTransfers.length
-      : showsFreeAgentList
-        ? filteredFreeAgents.length
-        : filteredTeams.reduce((total, team) => total + team.players.length, 0);
+    !hasGameData || isStandings
+      ? 0
+      : section === "transfers"
+        ? filteredTransfers.length
+        : showsFreeAgentList
+          ? filteredFreeAgents.length
+          : filteredTeams.reduce(
+              (total, team) => total + team.players.length,
+              0,
+            );
+
   const totalCount =
-    view === "transfers"
+    section === "transfers"
       ? data.transfers.length
       : showsFreeAgentList
         ? data.freeAgents.length
         : data.stats.playerCount;
+
   const hasResults = visibleCount > 0;
 
   return (
-    <div className="relative min-h-screen">
-      <div className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#070a0f]/85 backdrop-blur-xl">
+    <div className={cn(game.themeClass, "relative min-h-screen")}>
+      <div className="sticky top-0 z-40 bg-zinc-950/85 backdrop-blur-xl">
         <AppHeader
+          activeGame={game}
+          onGameChange={handleGameChange}
           lastUpdated={data.lastUpdated}
           lastUpdateSource={data.lastUpdateSource}
         />
-        <ControlBar
-          query={query}
-          onQueryChange={setQuery}
-          statusFilter={statusFilter}
-          onStatusFilterChange={handleStatusFilterChange}
-          view={view}
-          onViewChange={handleViewChange}
-          freeAgentCount={data.stats.freeAgentCount}
-          activeCount={data.stats.activeCount}
-          visibleCount={visibleCount}
-          totalCount={totalCount}
+        <SectionNav
+          game={game}
+          section={section}
+          onSectionChange={handleSectionChange}
+          counts={
+            hasGameData
+              ? {
+                  roster: data.stats.playerCount,
+                  transfers: data.transfers.length,
+                  lft: data.stats.freeAgentCount,
+                }
+              : undefined
+          }
         />
+        {hasGameData && !isStandings ? (
+          <ControlBar
+            query={query}
+            onQueryChange={setQuery}
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
+            showStatusFilter={section === "roster" || section === "transfers"}
+            placeholder={
+              section === "transfers"
+                ? "選手名・チーム名・出典で検索..."
+                : section === "lft"
+                  ? "LFT / FA 選手を検索..."
+                  : "選手名・チーム名・ロールで検索..."
+            }
+            freeAgentCount={data.stats.freeAgentCount}
+            activeCount={data.stats.activeCount}
+            visibleCount={visibleCount}
+            totalCount={totalCount}
+            onReset={resetFilters}
+          />
+        ) : null}
       </div>
 
       <main className="mx-auto max-w-[1600px] px-4 pb-16 pt-6 sm:px-6">
-        <section className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-gradient-to-r from-white/[0.035] via-white/[0.015] to-transparent px-4 py-5 sm:px-6">
-          <span className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-red-500/[0.07] blur-3xl" />
-          <span className="pointer-events-none absolute bottom-0 left-1/3 h-32 w-64 rounded-full bg-violet-500/[0.04] blur-3xl" />
+        <section className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-r from-zinc-900/70 via-zinc-900/35 to-zinc-950/20 px-4 py-5 sm:px-6">
+          <span className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-brand/[0.07] blur-3xl" />
+          <span className="pointer-events-none absolute bottom-0 left-1/3 h-32 w-64 rounded-full bg-brand-alt/[0.05] blur-3xl" />
 
           <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-red-400/20 bg-red-400/[0.06] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-red-300">
-                  <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
-                  Japan / VALORANT
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-brand/20 bg-brand/[0.06] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-brand">
+                  <span className="h-1.5 w-1.5 rounded-full bg-brand" />
+                  {game.regionLabel} / {game.name}
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/15 bg-emerald-400/[0.05] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">
-                  <Database className="h-2.5 w-2.5" />
-                  Local SQLite
-                </span>
+                {hasGameData ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/15 bg-emerald-400/[0.05] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">
+                    <Database className="h-2.5 w-2.5" />
+                    Local SQLite
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-zinc-700/60 bg-zinc-800/30 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
+                    <Layers className="h-2.5 w-2.5" />
+                    UI Framework
+                  </span>
+                )}
               </div>
               <h1 className="mt-3 text-balance font-display text-2xl font-black tracking-wide text-white sm:text-3xl">
-                プロチーム移籍・ロスター追跡
+                {game.heroTitle}
               </h1>
               <p className="mt-1.5 max-w-2xl text-[11px] leading-relaxed text-zinc-500 sm:text-xs">
-                ZETA DIVISION / DetonatioN FocusMe / FENNEL / MURASH
-                GAMING の4チームに限定し、ロスター、LFT / FA
-                選手、移籍・契約の履歴をひとつのダッシュボードで追跡。データは外部クラウドに送信されません。
+                {game.description}
               </p>
             </div>
 
-            <div className="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4 lg:w-[460px]">
-              <Metric
-                icon={<Shield className="h-3.5 w-3.5" />}
-                label="Teams"
-                value={data.stats.teamCount}
-                tone="violet"
-              />
-              <Metric
-                icon={<Users className="h-3.5 w-3.5" />}
-                label="Players"
-                value={data.stats.playerCount}
-                tone="slate"
-              />
-              <Metric
-                icon={<Activity className="h-3.5 w-3.5" />}
-                label="Active"
-                value={data.stats.activeCount}
-                tone="emerald"
-              />
-              <Metric
-                icon={<UserRoundSearch className="h-3.5 w-3.5" />}
-                label="LFT / FA"
-                value={data.stats.freeAgentCount}
-                tone="amber"
-              />
-            </div>
+            {hasGameData ? (
+              <div className="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4 lg:w-[460px]">
+                <Metric
+                  icon={<Shield className="h-3.5 w-3.5" />}
+                  label="Teams"
+                  value={data.stats.teamCount}
+                  tone="brand"
+                />
+                <Metric
+                  icon={<Users className="h-3.5 w-3.5" />}
+                  label="Players"
+                  value={data.stats.playerCount}
+                  tone="zinc"
+                />
+                <Metric
+                  icon={<Activity className="h-3.5 w-3.5" />}
+                  label="Active"
+                  value={data.stats.activeCount}
+                  tone="emerald"
+                />
+                <Metric
+                  icon={<UserRoundSearch className="h-3.5 w-3.5" />}
+                  label="LFT / FA"
+                  value={data.stats.freeAgentCount}
+                  tone="amber"
+                />
+              </div>
+            ) : (
+              <div className="grid shrink-0 grid-cols-2 gap-2 lg:w-[460px]">
+                <InfoTile label="Region" value={game.regionLabel} />
+                <InfoTile label="Theme" value={game.themeName} />
+                <InfoTile label="Data" value={game.dataPhase} />
+                <InfoTile label="Status" value="UI Ready" accent />
+              </div>
+            )}
           </div>
         </section>
 
         <div className="mb-3 mt-7 flex flex-wrap items-end justify-between gap-2">
           <div>
             <h2 className="font-display text-sm font-bold uppercase tracking-[0.2em] text-zinc-200">
-              {view === "transfers"
-                ? "直近の移籍タイムライン"
-                : showsFreeAgentList
-                  ? "LFT / FA 選手一覧"
-                  : "チーム別ロスター"}
+              {sectionMeta.title}
             </h2>
-            <p className="mt-1 text-[10.5px] text-zinc-600">
-              {view === "transfers"
-                ? "Liquipedia から取得した加入・移籍・退団・LFT / FA を新しい順に表示。選手名をクリックすると経歴が開きます。"
-                : showsFreeAgentList
-                  ? "移籍先を探している選手。カードをクリックして経歴を確認できます。"
-                  : "選手名をクリックすると移籍・所属タイムラインが開きます。"}
+            <p className="mt-1 max-w-3xl text-[10.5px] text-zinc-600">
+              {sectionMeta.description}
             </p>
           </div>
-          <span className="rounded-full border border-white/[0.07] bg-white/[0.02] px-2.5 py-1 font-mono text-[9.5px] uppercase tracking-wider text-zinc-500">
-            {query
-              ? `filtered: ${visibleCount}`
-              : `${visibleCount} ${view === "transfers" ? "events" : "players"}`}
+          <span className="rounded-full border border-zinc-800/80 bg-zinc-900/40 px-2.5 py-1 font-mono text-[9.5px] uppercase tracking-wider text-zinc-500">
+            {!hasGameData || isStandings
+              ? `${game.shortName} / ${sectionMeta.hint}`
+              : query
+                ? `filtered: ${visibleCount}`
+                : `${visibleCount} ${COUNT_UNIT[section]}`}
           </span>
         </div>
 
-        {hasResults ? (
-          view === "transfers" ? (
+        {!hasGameData ? (
+          <SectionPlaceholder
+            icon={game.icon}
+            eyebrow={`${game.shortName} / Title preview`}
+            title={`${game.name} の${sectionMeta.label}は準備中です`}
+            description={game.description}
+            phase={game.dataPhase}
+            points={[...game.scope, `テーマ: ${game.themeName}`]}
+          />
+        ) : isStandings ? (
+          <SectionPlaceholder
+            icon={Trophy}
+            eyebrow="Standings / UI Framework"
+            title="リーグ順位表は Phase 6 で実装予定"
+            description="順位表の表示枠とサブナビゲーションは先行して実装済みです。次フェーズで VCT サーキットポイントや勝敗データを取得し、このテーブルへ接続します。"
+            phase="Phase 6"
+            points={[
+              "リーグ公式順位・勝敗・ポイントの取得",
+              "チームカード右上の #1 ランクバッジ",
+              "順位順ソートと順位表の連携",
+            ]}
+          >
+            <StandingsSkeleton />
+          </SectionPlaceholder>
+        ) : hasResults ? (
+          section === "transfers" ? (
             <TransferTimeline
               events={filteredTransfers}
               players={data.players}
@@ -281,17 +378,19 @@ export function Dashboard({ data }: DashboardProps) {
             </div>
           )
         ) : (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.08] bg-white/[0.012] px-6 py-20 text-center">
-            <span className="flex h-12 w-12 items-center justify-center rounded-full border border-white/[0.07] bg-white/[0.03] text-zinc-600">
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-800/80 bg-zinc-900/20 px-6 py-20 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full border border-zinc-800/80 bg-zinc-900/50 text-zinc-600">
               <SearchX className="h-5 w-5" />
             </span>
             <p className="mt-4 font-display text-base font-bold tracking-wide text-zinc-300">
               条件に一致するデータがありません
             </p>
             <p className="mt-1 max-w-sm text-[11px] leading-relaxed text-zinc-600">
-              {view === "transfers"
+              {section === "transfers"
                 ? "検索語を短くするか、ステータスフィルターを「すべて」に戻してみてください。データが空の場合は npm run update を実行してください。"
-                : "検索語を短くするか、ステータスフィルターを「すべて」に戻してみてください。"}
+                : section === "lft"
+                  ? "LFT / FA の選手がまだ登録されていないか、検索条件に一致していません。"
+                  : "検索語を短くするか、ステータスフィルターを「すべて」に戻してみてください。"}
             </p>
             <Button
               variant="outline"
@@ -304,13 +403,14 @@ export function Dashboard({ data }: DashboardProps) {
           </div>
         )}
 
-        <footer className="mt-12 flex flex-col gap-2 border-t border-white/[0.05] pt-5 text-[10px] text-zinc-600 sm:flex-row sm:items-center sm:justify-between">
+        <footer className="mt-12 flex flex-col gap-2 border-t border-zinc-800/70 pt-5 text-[10px] text-zinc-600 sm:flex-row sm:items-center sm:justify-between">
           <p className="flex items-center gap-1.5">
             <Database className="h-3 w-3" />
             完全ローカル動作 / SQLite + Prisma / Next.js App Router
           </p>
           <p className="font-mono text-[9.5px] text-zinc-700">
-            Last local update: {data.lastUpdated ?? "未取得"}
+            Last local update:{" "}
+            {hasGameData ? data.lastUpdated ?? "未取得" : "—"}
             <span className="mx-2 text-zinc-800">|</span>
             npm run update
           </p>
@@ -337,17 +437,17 @@ function Metric({
   icon: ReactNode;
   label: string;
   value: number;
-  tone: "violet" | "slate" | "emerald" | "amber";
+  tone: "brand" | "zinc" | "emerald" | "amber";
 }) {
   const toneClassName = {
-    violet: "text-violet-300 border-violet-400/15 bg-violet-400/[0.06]",
-    slate: "text-slate-300 border-slate-400/15 bg-slate-400/[0.05]",
+    brand: "text-brand border-brand/20 bg-brand/[0.06]",
+    zinc: "text-zinc-300 border-zinc-600/40 bg-zinc-700/20",
     emerald: "text-emerald-300 border-emerald-400/15 bg-emerald-400/[0.05]",
     amber: "text-amber-300 border-amber-400/15 bg-amber-400/[0.05]",
   }[tone];
 
   return (
-    <div className="rounded-lg border border-white/[0.06] bg-black/20 px-2.5 py-2">
+    <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 px-2.5 py-2">
       <p className="flex items-center gap-1 text-[8.5px] font-semibold uppercase tracking-[0.16em] text-zinc-600">
         <span
           className={cn(
@@ -362,6 +462,65 @@ function Metric({
       <p className="mt-1.5 font-display text-xl font-black tracking-wide text-zinc-100">
         {value.toString().padStart(2, "0")}
       </p>
+    </div>
+  );
+}
+
+function InfoTile({
+  label,
+  value,
+  accent = false,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 px-2.5 py-2">
+      <p className="text-[8.5px] font-semibold uppercase tracking-[0.16em] text-zinc-600">
+        {label}
+      </p>
+      <p
+        title={value}
+        className={cn(
+          "mt-1.5 truncate font-display text-[13px] font-bold tracking-wide",
+          accent ? "text-brand" : "text-zinc-200",
+        )}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function StandingsSkeleton() {
+  return (
+    <div
+      aria-hidden
+      className="overflow-hidden rounded-lg border border-zinc-800/80 bg-zinc-950/40"
+    >
+      <div className="grid grid-cols-[28px_1fr_64px_44px] gap-2 border-b border-zinc-800/80 bg-zinc-900/60 px-3 py-2 text-[8.5px] font-semibold uppercase tracking-[0.14em] text-zinc-600">
+        <span>#</span>
+        <span>Team</span>
+        <span>W-L</span>
+        <span>Pts</span>
+      </div>
+      {[0, 1, 2, 3].map((row) => (
+        <div
+          key={row}
+          className="grid grid-cols-[28px_1fr_64px_44px] items-center gap-2 border-b border-zinc-800/50 px-3 py-2.5 last:border-b-0"
+        >
+          <span className="font-mono text-[10px] text-zinc-700">
+            {row + 1}
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="h-5 w-5 rounded border border-zinc-800 bg-zinc-900/70" />
+            <span className="h-2 w-20 rounded bg-zinc-800/80" />
+          </span>
+          <span className="font-mono text-[10px] text-zinc-700">—</span>
+          <span className="font-mono text-[10px] text-zinc-700">—</span>
+        </div>
+      ))}
     </div>
   );
 }

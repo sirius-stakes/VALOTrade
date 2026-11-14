@@ -4,30 +4,35 @@
 
 @layer base {
   :root {
-    --background: 220 33% 3.5%;
-    --foreground: 214 20% 92%;
-    --card: 220 28% 5%;
-    --card-foreground: 214 20% 92%;
-    --popover: 220 28% 5%;
-    --popover-foreground: 214 20% 92%;
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 6% 7%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 6% 7%;
+    --popover-foreground: 0 0% 98%;
     --primary: 0 84% 60%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 217 20% 12%;
-    --secondary-foreground: 214 20% 92%;
-    --muted: 217 20% 12%;
-    --muted-foreground: 215 14% 52%;
-    --accent: 217 20% 14%;
-    --accent-foreground: 214 20% 92%;
+    --secondary: 240 4% 16%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 4% 16%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 240 4% 16%;
+    --accent-foreground: 0 0% 98%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 217 20% 14%;
-    --input: 217 20% 14%;
+    --border: 240 4% 16%;
+    --input: 240 4% 16%;
     --ring: 0 70% 55%;
     --radius: 0.65rem;
     --font-sans: "Segoe UI", "Hiragino Kaku Gothic ProN", "Yu Gothic",
       "Meiryo", system-ui, -apple-system, sans-serif;
     --font-display: "Bahnschrift", "DIN Alternate", "Roboto Condensed",
       "Arial Narrow", "Segoe UI", "Yu Gothic", sans-serif;
+
+    /* タイトル別テーマアクセント（デフォルト: VALORANT / クリムゾン） */
+    --brand-rgb: 248 113 113;
+    --brand-strong-rgb: 239 68 68;
+    --brand-alt-rgb: 244 63 94;
   }
 
   * {
@@ -44,19 +49,19 @@
     font-feature-settings:
       "rlig" 1,
       "calt" 1;
-    background-color: #070a0f;
+    background-color: #09090b;
     background-image:
       radial-gradient(
         ellipse 75% 45% at 50% -12%,
-        rgba(239, 68, 68, 0.055),
+        rgba(255, 255, 255, 0.028),
         transparent 62%
       ),
       radial-gradient(
         ellipse 55% 35% at 100% 0%,
-        rgba(139, 92, 246, 0.045),
+        rgba(255, 255, 255, 0.014),
         transparent 62%
       ),
-      linear-gradient(180deg, #070a0f 0%, #080b10 48%, #06080c 100%);
+      linear-gradient(180deg, #09090b 0%, #0a0a0c 48%, #070708 100%);
     background-attachment: fixed;
     min-height: 100vh;
   }
@@ -67,8 +72,8 @@
     inset: 0;
     pointer-events: none;
     background-image:
-      linear-gradient(rgba(148, 163, 184, 0.022) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(148, 163, 184, 0.022) 1px, transparent 1px);
+      linear-gradient(rgba(148, 163, 184, 0.018) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 163, 184, 0.018) 1px, transparent 1px);
     background-size: 64px 64px;
     -webkit-mask-image: radial-gradient(
       ellipse 85% 60% at 50% 0%,
@@ -83,7 +88,7 @@
   }
 
   ::selection {
-    background: rgba(248, 113, 113, 0.28);
+    background: rgb(var(--brand-rgb) / 0.3);
     color: #fff;
   }
 
@@ -93,18 +98,46 @@
   }
 
   ::-webkit-scrollbar-track {
-    background: #080b11;
+    background: #09090b;
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #1e293b;
-    border: 2px solid #080b11;
+    background: #27272a;
+    border: 2px solid #09090b;
     border-radius: 999px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: #334155;
+    background: #3f3f46;
   }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   タイトル別テーマ。ラッパー要素に付与すると配下で brand 色が切り替わる。
+   VALORANT = クリムゾンレッド / LoL = ゴールド＆シアン / 第五人格 = パープル＆アンバー
+   ───────────────────────────────────────────────────────────── */
+.theme-valorant {
+  --brand-rgb: 248 113 113;
+  --brand-strong-rgb: 239 68 68;
+  --brand-alt-rgb: 244 63 94;
+  --primary: 0 84% 60%;
+  --ring: 0 70% 55%;
+}
+
+.theme-lol {
+  --brand-rgb: 250 204 21;
+  --brand-strong-rgb: 234 179 8;
+  --brand-alt-rgb: 34 211 238;
+  --primary: 48 96% 53%;
+  --ring: 48 90% 55%;
+}
+
+.theme-idv {
+  --brand-rgb: 192 132 252;
+  --brand-strong-rgb: 168 85 247;
+  --brand-alt-rgb: 251 191 36;
+  --primary: 271 91% 65%;
+  --ring: 271 80% 65%;
 }
 
 @layer utilities {

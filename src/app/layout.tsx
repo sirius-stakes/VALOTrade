@@ -3,12 +3,12 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "VALO-ROSTER JP | プロチーム移籍・ロスター追跡",
-    template: "%s | VALO-ROSTER JP",
+    default: "TEAMTRADE | マルチタイトル・ロスター追跡",
+    template: "%s | TEAMTRADE",
   },
   description:
-    "日本のVALORANTプロシーンのチームロスター・移籍・LFT/FA情報を追跡する、完全ローカル完結型ダッシュボード。",
-  applicationName: "VALO-ROSTER JP",
+    "VALORANT / League of Legends / Identity V のプロチームロスター・移籍・順位を追跡する、完全ローカル完結型ダッシュボード。",
+  applicationName: "TEAMTRADE",
   robots: {
     index: false,
     follow: false,
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#070a0f",
+  themeColor: "#09090b",
   colorScheme: "dark",
 };
 

@@ -1,6 +1,7 @@
-# VALO-ROSTER JP
+# VALO-ROSTER JP / TEAMTRADE
 
 日本の **VALORANT** プロシーンを対象にした、**完全ローカル完結型**のプロチーム移籍・ロスター追跡ダッシュボードです。
+Phase 2-1 で **VALORANT / League of Legends / Identity V** のタイトル切替と、タイトル別テーマアクセントを備えた 2 階層ナビゲーションへ刷新しました（LoL / Identity V のデータ取得は後続フェーズ）。
 
 - 外部クラウド（Vercel / Supabase / GitHub Actions など）、DB の無料枠、有料 API は一切使用しません。
 - データはローカルの **SQLite**（`prisma/dev.db`）に保存します。
@@ -62,12 +63,14 @@ npm run start
 
 ## 画面の機能
 
-- **固定ヘッダー**: アプリロゴ（`VALO-ROSTER JP`）、タイトル切替タブ（VALORANT 固定）、最終データ同期日時（`Last synced`）、`npm run update` の案内。
+- **固定ヘッダー（タイトル切替）**: アプリロゴ（`TEAMTRADE`）、ゲームタイトルタブ（VALORANT / League of Legends / Identity V）、最終データ同期日時（`Last synced`）、`npm run update` の案内。
+  - 選択中のタイトルに応じてテーマアクセントが切り替わります（VALORANT = クリムゾンレッド / LoL = ゴールド＆シアン / 第五人格 = ゴシックパープル＆アンバー）。
+  - データ未投入のタイトルには `Soon` バッジを表示し、テーマ付きの準備中パネルへ切り替わります。
+- **サブナビゲーション**: ロスター / 順位表 / 移籍 / LFT市場 の 2 階層目タブ。順位表は Phase 6 のデータ接続待ちで、UI の枠組みのみ先行実装しています。
 - **コントロールバー**:
   - 選手名・チーム名・ロールのリアルタイムインクリメンタル検索。
   - ステータスフィルター（すべて / LFT・FAのみ / Activeのみ）。
-  - 表示切替（チーム別ロスター表示 / 直近の移籍タイムライン表示）。
-- **チーム別グリッド**: 最大 4 カラムのレスポンシブカード。チーム名、略称、リージョン（JP）、ロスター、ロール、ステータスバッジを表示。
+- **チーム別グリッド**: 最大 4 カラムのレスポンシブカード。`zinc-950` / `zinc-900` のチャコール基調と極細ボーダーで、チーム名・略称・リージョン（JP）・ロスター・ロール・ステータスバッジを表示。
 - **ステータスバッジ**:
   - `Active`（エメラルド）
   - `Sub / Reserve`（スレート）
@@ -101,8 +104,10 @@ src/
     page.tsx             # サーバーコンポーネント（DB 読み込み）
     globals.css          # ダークテーマ / 背景グリッド
   components/
-    dashboard.tsx        # 検索・フィルター・表示モードの状態管理
-    app-header.tsx
+    dashboard.tsx        # 検索・フィルター・タイトル/サブセクションの状態管理
+    app-header.tsx       # タイトル切替ヘッダー
+    section-nav.tsx      # ロスター / 順位表 / 移籍 / LFT市場 のサブナビ
+    section-placeholder.tsx # 準備中セクションの UI 枠組み
     control-bar.tsx
     team-card.tsx
     free-agent-card.tsx
@@ -115,6 +120,7 @@ src/
     ui/                  # shadcn/ui スタイルのプリミティブ
   lib/
     prisma.ts
+    games.ts             # タイトル別テーマ・サブナビゲーション定義
     roster.ts            # DB → 画面用 DTO 変換（対象4チームに限定）
     status.ts            # ステータス・ロール・チームアクセント定義
     target-teams.ts      # 対象4チーム・表記揺れ・正規化ルール

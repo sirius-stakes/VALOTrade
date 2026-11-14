@@ -24,15 +24,18 @@ export function TeamCard({ team, onSelectPlayer }: TeamCardProps) {
   const accent = getTeamAccent(team.accent);
 
   return (
-    <article className="group/card relative flex flex-col overflow-hidden rounded-xl border border-white/[0.07] bg-gradient-to-b from-white/[0.045] to-white/[0.012] shadow-[0_14px_40px_-24px_rgba(0,0,0,0.9)] transition-colors duration-200 hover:border-white/[0.14]">
-      <div
+    <article className="group/card relative flex flex-col overflow-hidden rounded-xl border border-zinc-800/80 bg-zinc-900/40 shadow-[0_16px_44px_-30px_rgba(0,0,0,1)] transition-colors duration-200 hover:border-zinc-700/90 hover:bg-zinc-900/55">
+      <span
+        aria-hidden
         className={cn(
-          "pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent",
+          "pointer-events-none absolute inset-x-0 top-0 h-px opacity-70",
+          accent.line,
         )}
       />
       <div
+        aria-hidden
         className={cn(
-          "pointer-events-none absolute -right-16 -top-20 h-40 w-40 rounded-full bg-gradient-to-br opacity-[0.09] blur-2xl",
+          "pointer-events-none absolute -right-16 -top-20 h-40 w-40 rounded-full bg-gradient-to-br opacity-[0.07] blur-2xl",
           accent.gradient,
         )}
       />
@@ -63,7 +66,7 @@ export function TeamCard({ team, onSelectPlayer }: TeamCardProps) {
             ) : null}
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            <Badge className="border-white/10 bg-white/[0.04] text-zinc-400">
+            <Badge className="border-zinc-700/70 bg-zinc-800/40 text-zinc-400">
               {team.regionCode}
             </Badge>
             <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-600">
@@ -87,7 +90,7 @@ export function TeamCard({ team, onSelectPlayer }: TeamCardProps) {
               type="button"
               onClick={() => onSelectPlayer(player)}
               aria-label={`${player.handle} の詳細を開く`}
-              className="group/player flex w-full items-center gap-2.5 rounded-lg border border-transparent px-2 py-1.5 text-left transition-colors hover:border-white/[0.06] hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30"
+              className="group/player flex w-full items-center gap-2.5 rounded-lg border border-transparent px-2 py-1.5 text-left transition-colors hover:border-zinc-700/60 hover:bg-zinc-800/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
             >
               <PlayerAvatar handle={player.handle} size="sm" />
               <div className="min-w-0 flex-1">
@@ -122,7 +125,7 @@ export function TeamCard({ team, onSelectPlayer }: TeamCardProps) {
         )}
       </div>
 
-      <footer className="mt-auto flex items-center justify-between border-t border-white/[0.06] px-4 py-2.5">
+      <footer className="mt-auto flex items-center justify-between border-t border-zinc-800/70 bg-zinc-950/30 px-4 py-2.5">
         <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-zinc-600">
           <Users className="h-3 w-3" />
           {team.players.length} players
