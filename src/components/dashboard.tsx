@@ -14,7 +14,12 @@ import {
 
 import { AppHeader } from "@/components/app-header";
 import { ControlBar } from "@/components/control-bar";
-import { FreeAgentCard } from "@/components/free-agent-card";
+import {
+  MarketFilterBar,
+  type MarketRoleFilter,
+  type MarketStatusFilter,
+} from "@/components/market-filter-bar";
+import { MarketPlayerCard } from "@/components/market-player-card";
 import { PlayerModal } from "@/components/player-modal";
 import { RegionTabs, type RegionTab } from "@/components/region-tabs";
 import { SectionNav } from "@/components/section-nav";
@@ -28,9 +33,11 @@ import {
   getGameDefinition,
   type DashboardSection,
 } from "@/lib/games";
+import { isStreamerLikeRole } from "@/lib/roles";
 import type { StatusFilter } from "@/lib/status";
 import type { DashboardData, PlayerDto, TeamDto } from "@/lib/types";
 import { useFavorites } from "@/lib/use-favorites";
+import { usePlayerFavorites } from "@/lib/use-player-favorites";
 import { cn } from "@/lib/utils";
 
 type DashboardProps = {
@@ -76,7 +83,13 @@ export function Dashboard({ data }: DashboardProps) {
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerDto | null>(null);
   const [selectedTeam, setSelectedTeam] = useState<TeamDto | null>(null);
   const [selectedRegion, setSelectedRegion] = useState<RegionTab>("all");
+  const [marketStatusFilter, setMarketStatusFilter] =
+    useState<MarketStatusFilter>("all");
+  const [marketRoleFilter, setMarketRoleFilter] =
+    useState<MarketRoleFilter>("all");
   const { isFavorite, toggleFavorite } = useFavorites();
+  const { isFavorite: isPlayerFavorite, toggleFavorite: togglePlayerFavorite } =
+    usePlayerFavorites();
 
   const game = getGameDefinition(gameSlug);
   const hasGameData = game.hasLocalData && game.slug === data.game.slug;
@@ -103,6 +116,10 @@ export function Dashboard({ data }: DashboardProps) {
     setQuery("");
     setSelectedPlayer(null);
     setSelectedTeam(null);
+    if (next !== "lft") {
+      setMarketStatusFilter("all");
+      setMarketRoleFilter("all");
+    }
   };
 
   const resetFilters = () => {
@@ -111,6 +128,8 @@ export function Dashboard({ data }: DashboardProps) {
     setSelectedRegion("all");
     setSection("roster");
     setSelectedTeam(null);
+    setMarketStatusFilter("all");
+    setMarketRoleFilter("all");
   };
 
   const REGION_ORDER = ["VCT Pacific (JP)", "JP Tier 2 (VCJ)"];
@@ -189,14 +208,6 @@ export function Dashboard({ data }: DashboardProps) {
     isFavorite,
   ]);
 
-  const filteredFreeAgents = useMemo(() => {
-    return data.freeAgents.filter(
-      (player) =>
-        normalizedQuery.length === 0 ||
-        playerMatchesQuery(player, normalizedQuery),
-    );
-  }, [data.freeAgents, normalizedQuery]);
-
   const filteredTransfers = useMemo(() => {
     return data.transfers.filter((event) => {
       if (
@@ -223,15 +234,76 @@ export function Dashboard({ data }: DashboardProps) {
     });
   }, [data.transfers, normalizedQuery, statusFilter]);
 
-  const showsFreeAgentList = section === "lft";
+  const isLftSection = section === "lft";
+
+  const marketPlayers = useMemo(() => {
+    return data.players
+      .filter((player) => {
+        if (
+          !showStaff &&
+          (player.category === "STAFF" || isStreamerLikeRole(player.currentRole))
+        ) {
+          return false;
+        }
+        const isMarketStatus = ["LFT", "FA", "SUB", "INACTIVE"].includes(
+          player.status,
+        );
+        const hasNoCurrentTeam = !player.currentTeamName;
+        return isMarketStatus || hasNoCurrentTeam;
+      })
+      .sort((a, b) => {
+        const aFavorite = isPlayerFavorite(data.game.slug, a.id) ? 1 : 0;
+        const bFavorite = isPlayerFavorite(data.game.slug, b.id) ? 1 : 0;
+        if (aFavorite !== bFavorite) return bFavorite - aFavorite;
+
+        const statusOrder: Record<string, number> = {
+          LFT: 0,
+          FA: 1,
+          SUB: 2,
+          INACTIVE: 3,
+          ACTIVE: 4,
+        };
+        const orderDiff =
+          (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99);
+        if (orderDiff !== 0) return orderDiff;
+
+        return a.handle.localeCompare(b.handle, "ja");
+      });
+  }, [data.players, data.game.slug, showStaff, isPlayerFavorite]);
+
+  const filteredMarketPlayers = useMemo(() => {
+    return marketPlayers.filter((player) => {
+      if (marketStatusFilter === "lft" && player.status !== "LFT") {
+        return false;
+      }
+      if (marketStatusFilter === "fa" && player.status !== "FA") {
+        return false;
+      }
+      if (
+        marketStatusFilter === "inactive-bench" &&
+        player.status !== "INACTIVE" &&
+        player.status !== "SUB"
+      ) {
+        return false;
+      }
+      if (marketRoleFilter !== "all") {
+        const role = player.currentRole?.trim() ?? "";
+        if (role.toLowerCase() !== marketRoleFilter.toLowerCase()) {
+          return false;
+        }
+      }
+      if (normalizedQuery.length === 0) return true;
+      return playerMatchesQuery(player, normalizedQuery);
+    });
+  }, [marketPlayers, marketStatusFilter, marketRoleFilter, normalizedQuery]);
 
   const visibleCount =
     !hasGameData || isStandings
       ? 0
       : section === "transfers"
         ? filteredTransfers.length
-        : showsFreeAgentList
-          ? filteredFreeAgents.length
+        : isLftSection
+          ? filteredMarketPlayers.length
           : filteredTeams.reduce(
               (total, team) =>
                 total + team.players.length + team.staff.length,
@@ -241,8 +313,8 @@ export function Dashboard({ data }: DashboardProps) {
   const totalCount =
     section === "transfers"
       ? data.transfers.length
-      : showsFreeAgentList
-        ? data.freeAgents.length
+      : isLftSection
+        ? marketPlayers.length
         : data.stats.playerCount + (showStaff ? data.stats.staffCount : 0);
 
   const hasResults = visibleCount > 0;
@@ -300,6 +372,18 @@ export function Dashboard({ data }: DashboardProps) {
             visibleCount={visibleCount}
             totalCount={totalCount}
             onReset={resetFilters}
+          />
+        ) : null}
+
+        {hasGameData && isLftSection ? (
+          <MarketFilterBar
+            statusFilter={marketStatusFilter}
+            onStatusFilterChange={setMarketStatusFilter}
+            roleFilter={marketRoleFilter}
+            onRoleFilterChange={setMarketRoleFilter}
+            showStaff={showStaff}
+            onShowStaffChange={setShowStaff}
+            resultCount={filteredMarketPlayers.length}
           />
         ) : null}
       </div>
@@ -423,12 +507,16 @@ export function Dashboard({ data }: DashboardProps) {
               players={data.players}
               onSelectPlayer={setSelectedPlayer}
             />
-          ) : showsFreeAgentList ? (
+          ) : isLftSection ? (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {filteredFreeAgents.map((player) => (
-                <FreeAgentCard
+              {filteredMarketPlayers.map((player) => (
+                <MarketPlayerCard
                   key={player.id}
                   player={player}
+                  isFavorite={isPlayerFavorite(data.game.slug, player.id)}
+                  onToggleFavorite={() =>
+                    togglePlayerFavorite(data.game.slug, player.id)
+                  }
                   onSelect={setSelectedPlayer}
                 />
               ))}
@@ -462,7 +550,7 @@ export function Dashboard({ data }: DashboardProps) {
               {section === "transfers"
                 ? "検索語を短くするか、ステータスフィルターを「すべて」に戻してみてください。データが空の場合は npm run update を実行してください。"
                 : section === "lft"
-                  ? "LFT / FA の選手がまだ登録されていないか、検索条件に一致していません。"
+                  ? "現在、条件に一致する LFT / FA 選手は登録されていません。ステータス・ロールフィルターや検索語を確認してください。"
                   : "検索語を短くするか、ステータスフィルターを「すべて」に戻してみてください。"}
             </p>
             <Button
