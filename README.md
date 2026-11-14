@@ -92,7 +92,8 @@ scripts/
   sources.ts             # 上記スクリプトの取得対象定義
   lib/roster-parser.ts   # 上記スクリプトの HTML パーサー
   fixtures/
-    liquipedia-transfers.html  # Liquipedia 移籍表のオフライン確認用フィクスチャ
+    liquipedia-roster.html     # MediaWiki API ロスターのオフライン確認用フィクスチャ
+    liquipedia-transfers.html  # 旧・移籍表パーサーの参考フィクスチャ
     roster-sample.html         # 旧パーサー確認用フィクスチャ
 src/
   app/
@@ -124,10 +125,11 @@ src/
 ## Liquipedia 更新 CLI
 
 `npm run update` は `scripts/fetch-liquipedia.ts` を実行し、Liquipedia の
-[Portal:Transfers](https://liquipedia.net/valorant/Portal:Transfers) から直近の移籍・退団・LFT / FA を取得して SQLite に反映します。
+[MediaWiki API](https://liquipedia.net/valorant/api.php)（`action=parse&prop=text`）から
+対象 4 チームのページ HTML を取得し、ロスターを SQLite に反映します。
 
 ```bash
-# 最新の移籍情報を取得して DB を更新
+# 4チームのロスターを取得して DB を更新
 npm run update
 
 # DB を変更せず、解析結果だけ確認
@@ -135,46 +137,43 @@ npm run update -- --dry-run --verbose
 
 # ローカル HTML フィクスチャでパーサーを確認（ネットワーク不要）
 npm run update:fixture
-
-# 対象4チームのロスターも取得（チームページを追加取得）
-npm run update -- --teams
 ```
 
 > 取得対象は **ZETA DIVISION / DetonatioN FocusMe / FENNEL / QTnet DISCONNECT** の 4 チームのみです。
-> 旧チームまたは新チームがこの 4 チームに一致する移籍・LFT / FA 行だけを保存し、
-> それ以外のチーム・地域のイベントはすべてスキップします。
+> `page=ZETA_DIVISION` / `page=DetonatioN_FocusMe` / `page=FENNEL` / `page=QTnet_DISCONNECT` を
+> 1 ページずつ取得します。ページが存在しない場合は警告を出して残りのチームを継続します。
 
 ### Liquipedia 規約遵守
 
-スクレイピング処理には以下を必ず実装しています。
+API リクエストには以下を必ず実装しています。
 
 1. **カスタム User-Agent**: 既定値は
-   `ValorantRosterTracker/1.0 (local-personal-tool; contact@example.com)`。
+   `ValorantRosterApp/1.0 (local-personal-tool; contact@example.com)`。
    `LIQUIPEDIA_USER_AGENT` 環境変数で上書きできます。連絡先を括弧内に含めない場合は実行を中止します。
-2. **Rate Limit**: すべてのリクエスト間に最低 **2,500ms** の待機を挟みます（`await sleep(2500)`）。
-   `LIQUIPEDIA_DELAY_MS` で延長できますが、2,500ms 未満にはできません。
-3. **Cloudflare Turnstile は自動回避しません**。403 / captcha を検出した場合は処理を中止し、
+2. **Accept-Encoding**: `gzip` を付与します。
+3. **Rate Limit**: レスポンス完了後、次のチームを取得するまで最低 **3,000ms** の待機を挟みます。
+   `LIQUIPEDIA_DELAY_MS` で延長できますが、3,000ms 未満にはできません。
+4. **Cloudflare Turnstile は自動回避しません**。403 / captcha を検出した場合は処理を中止し、
    ブラウザでページを開いてから再実行するよう案内します。
-4. 取得結果は `TransferEvent.dedupeKey` で重複排除し、`upsert` で更新します。
+5. 選手は `Player`、在籍期間は `MembershipHistory` に `upsert` します。
 
 ### オプション
 
 | オプション | 説明 |
 | --- | --- |
 | `--dry-run` | DB へ書き込まず、解析結果だけ表示 |
-| `--verbose` | 取り込むイベントを 1 件ずつ表示 |
-| `--debug` | 取得した HTML を `scripts/.cache/` に保存 |
-| `--fixture=<path>` | ネットワーク取得の代わりにローカル HTML を解析 |
-| `--url=<url>` | 取得先 URL を変更（既定: Portal:Transfers） |
-| `--limit=<n>` | 取り込むイベント数の上限（既定: 150） |
-| `--timeout=<ms>` | 1 リクエストのタイムアウト（既定: 20000ms） |
-| `--delay=<ms>` | リクエスト間隔（2,500ms 未満は無視） |
-| `--teams` | 対象4チーム（ZETA / DFM / FENNEL / QTD）のロスターも取得 |
+| `--verbose` | 取得した全選手・警告を表示 |
+| `--debug` | API レスポンスを `scripts/.cache/` に保存 |
+| `--fixture=<path>` | ネットワーク取得の代わりに API JSON / HTML を解析 |
+| `--team=<name>` | 取得対象を 1 チームに絞る（ページ名・チーム名・略称） |
+| `--timeout=<ms>` | 1 リクエストのタイムアウト（既定: 30000ms） |
+| `--delay=<ms>` | リクエスト間隔（3,000ms 未満は無視） |
+| `--teams` | 互換用（現在は常に 4 チームのロスターを取得） |
 
 ### 更新結果
 
-- 移籍イベントは `TransferEvent` に保存され、「直近の移籍タイムライン」に表示されます。
-- 加入・移籍は `MembershipHistory` の現所属を更新し、退団・LFT / FA・休止は現所属を終了します。
+- 選手・スタッフは `Player` に保存され、ロール（Player / Head Coach など）と在籍期間は `MembershipHistory` に保存されます。
+- 現役ロスターは `isCurrent=true`、Inactive / Former は退団・休止年月を `endDate` に入れて `isCurrent=false` にします。
 - 実行結果は `UpdateLog` に保存され、ヘッダーの `Last synced` に反映されます。
 - 取得に失敗した場合も `UpdateLog` に `FAILED` として記録されます。
 
@@ -193,7 +192,7 @@ Game 1 ── * Team * ── 1 Region
 - `Team`: チーム名、略称、ロゴ URL、公式 URL、地域、表示順。
 - `Player`: ハンドル、本名（任意）、現在ステータス（`ACTIVE` / `SUB` / `LFT` / `FA` / `INACTIVE`）、X / 公式 URL、メモ。
 - `MembershipHistory`: 所属チーム、ロール、開始年月・終了年月、現所属フラグ、公式発表 URL。
-- `TransferEvent`: Liquipedia から取得した移籍イベント（加入 / 移籍 / 退団 / LFT / FA / 休止 / 引退）、出典 URL、重複排除キー。
+- `TransferEvent`: 移籍タイムライン用のイベント（加入 / 移籍 / 退団 / LFT / FA / 休止 / 引退）、出典 URL、重複排除キー。
 - `UpdateLog`: ローカル更新 CLI の実行履歴（ヘッダー表示用）。
 
 日付は画面表示と SQLite での比較を単純化するため `YYYY-MM`（移籍イベントは `YYYY-MM-DD`）の文字列で保持しています。
@@ -221,10 +220,10 @@ npm run db:generate  # Prisma Client 生成
 npm run db:migrate   # マイグレーション作成・適用
 npm run db:seed      # 初期データ投入
 npm run db:reset     # DB を初期化して再シード
-npm run update       # Liquipedia からローカル更新
-npm run update:teams # Liquipedia の移籍 + 対象4チームのロスターを更新
+npm run update       # Liquipedia MediaWiki API から対象4チームのロスターを更新
+npm run update:teams # 互換用（update と同じ）
 npm run update:dry   # Liquipedia 更新の dry-run
-npm run update:fixture # 同梱フィクスチャでパーサー確認
+npm run update:fixture # 同梱ロスターHTMLでパーサー確認
 ```
 
 ## トラブルシューティング
@@ -233,8 +232,8 @@ npm run update:fixture # 同梱フィクスチャでパーサー確認
   - `npx prisma migrate dev` → `npm run db:seed` の順に実行してください。
 - **`npm run update` が 403 / captcha で失敗する**
   - Liquipedia は自動アクセスに Cloudflare Turnstile を出すことがあります。規約に従い自動回避は行いません。
-    ブラウザで <https://liquipedia.net/valorant/Portal:Transfers> を開ける状態にしてから、時間を置いて再実行してください。
-  - ネットワークに接続できない場合は `npm run update:fixture` でパーサーと DB 反映を確認できます。
+    ブラウザで <https://liquipedia.net/valorant/ZETA_DIVISION> を開ける状態にしてから、時間を置いて再実行してください。
+  - ネットワークに接続できない場合は `npm run update:fixture` でパーサーを確認できます（dry-run のため DB は変更しません）。
 - **ポート 3000 が使用中**
   - `npm run dev -- -p 3001` で別ポートを使用できます。
 - **データを初期状態に戻したい**

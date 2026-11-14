@@ -15,7 +15,7 @@
     "update:liquipedia": "tsx scripts/fetch-liquipedia.ts",
     "update:teams": "tsx scripts/fetch-liquipedia.ts --teams",
     "update:dry": "tsx scripts/fetch-liquipedia.ts --dry-run --verbose",
-    "update:fixture": "tsx scripts/fetch-liquipedia.ts --fixture=scripts/fixtures/liquipedia-transfers.html --dry-run --verbose",
+    "update:fixture": "tsx scripts/fetch-liquipedia.ts --fixture=scripts/fixtures/liquipedia-roster.html --team=ZETA_DIVISION --dry-run --verbose",
     "postinstall": "prisma generate"
   },
   "prisma": {

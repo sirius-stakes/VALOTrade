@@ -1,0 +1,29 @@
+# AGENTS.md - プロジェクト開発・運用ルール
+
+## 1. 開発環境・技術スタック
+- **OS**: Windows (VS Code + OpenCode)
+- **Framework**: Next.js (App Router), TypeScript, Tailwind CSS, Lucide Icons
+- **Database**: SQLite + Prisma（ローカル完結・外部クラウド依存なし）
+- **Data Source**: Liquipedia MediaWiki API (`[https://liquipedia.net/valorant/api.php](https://liquipedia.net/valorant/api.php)`)
+
+## 2. サーバー起動・プロセス管理【厳守】
+- **`npm run dev` や `npm start` などのローカル開発サーバーの自動起動・バックグラウンド常駐は禁止。**
+- ポート占有やプロセス残存を防ぐため、サーバーの起動とブラウザでの動作確認はすべてユーザーが手動で行う。
+- OpenCode側での動作確認は、型チェック（`npx tsc --noEmit`）やビルド確認（`npm run build`）のみで完結させること。
+
+## 3. Git 操作の線引き【厳守】
+- 機能実装・修正が完了し、`npm run build`（および型チェック）が正常に通過した区切りで、ローカルリポジトリへの `git add` および `git commit`（日本語で簡潔なコミットメッセージ）までを自動実行すること。
+- **リモートへの `git push` やブランチの強制操作（`--force` 等）は禁止。** Pushはユーザーが手動で行う。
+
+## 4. データ取得・API利用規約の遵守
+- 外部有料APIやクラウド無料枠には依存しないこと。
+- Liquipedia API (`api.php`) へリクエストを送る際は、必ずカスタム `User-Agent`（連絡先入り）および `Accept-Encoding: gzip` ヘッダーを付与し、連続リクエスト間には必ず3秒以上のウェイト（`sleep(3000)`）を設けること。
+
+## 5. UI・デザイン統一ルール
+- ベースカラー: ダークテーマ（Zinc / Slate 基調）
+- ステータスバッジ配色:
+  - `ACTIVE`: エメラルドグリーン系
+  - `SUB` / `RESERVE`: スレートグレー系
+  - `LFT`: アンバー / オレンジ系（視認性を高く強調）
+  - `FA`: パープル系
+  - `INACTIVE`: ダークグレー系
