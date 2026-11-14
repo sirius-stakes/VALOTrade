@@ -41,7 +41,8 @@ import { usePlayerFavorites } from "@/lib/use-player-favorites";
 import { cn } from "@/lib/utils";
 
 type DashboardProps = {
-  data: DashboardData;
+  dataMap: Record<string, DashboardData>;
+  initialGameSlug: string;
 };
 
 const COUNT_UNIT: Record<DashboardSection, string> = {
@@ -82,11 +83,18 @@ function roleMatchesFilter(
   const normalizedFilter = filter.toLowerCase();
   if (normalizedRole === normalizedFilter) return true;
   if (filter === "Coach" && normalizedRole.includes("coach")) return true;
+  // LoL: Bot / ADC を同義として扱う
+  if (
+    (filter === "Bot" || filter === "ADC") &&
+    (normalizedRole === "bot" || normalizedRole === "adc")
+  ) {
+    return true;
+  }
   return false;
 }
 
-export function Dashboard({ data }: DashboardProps) {
-  const [gameSlug, setGameSlug] = useState(data.game.slug);
+export function Dashboard({ dataMap, initialGameSlug }: DashboardProps) {
+  const [gameSlug, setGameSlug] = useState(initialGameSlug);
   const [section, setSection] = useState<DashboardSection>("roster");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -103,7 +111,28 @@ export function Dashboard({ data }: DashboardProps) {
     usePlayerFavorites();
 
   const game = getGameDefinition(gameSlug);
-  const hasGameData = game.hasLocalData && game.slug === data.game.slug;
+  const data = dataMap[gameSlug] ?? {
+    game: {
+      id: "",
+      slug: game.slug,
+      name: game.name,
+      shortName: game.shortName,
+    },
+    teams: [],
+    players: [],
+    freeAgents: [],
+    transfers: [],
+    lastUpdated: null,
+    lastUpdateSource: null,
+    stats: {
+      teamCount: 0,
+      playerCount: 0,
+      activeCount: 0,
+      freeAgentCount: 0,
+      staffCount: 0,
+    },
+  };
+  const hasGameData = Boolean(dataMap[gameSlug]);
   const sectionMeta =
     DASHBOARD_SECTIONS.find((item) => item.key === section) ??
     DASHBOARD_SECTIONS[0];
@@ -119,6 +148,8 @@ export function Dashboard({ data }: DashboardProps) {
     setQuery("");
     setSelectedPlayer(null);
     setSelectedTeam(null);
+    setMarketStatusFilter("all");
+    setMarketRoleFilter("all");
   };
 
   const handleSectionChange = (next: DashboardSection) => {
@@ -143,7 +174,10 @@ export function Dashboard({ data }: DashboardProps) {
     setMarketRoleFilter("all");
   };
 
-  const REGION_ORDER = ["VCT Pacific (JP)", "JP Tier 2 (VCJ)"];
+  const REGION_ORDER =
+    gameSlug === "league-of-legends"
+      ? ["LCK"]
+      : ["VCT Pacific (JP)", "JP Tier 2 (VCJ)"];
 
   const availableRegions = useMemo(
     () =>
@@ -338,6 +372,13 @@ export function Dashboard({ data }: DashboardProps) {
           onGameChange={handleGameChange}
           lastUpdated={data.lastUpdated}
           lastUpdateSource={data.lastUpdateSource}
+          updateCommand={
+            gameSlug === "league-of-legends"
+              ? "npm run update:lol"
+              : gameSlug === "identity-v"
+                ? "npm run update:idv"
+                : "npm run update:valo"
+          }
         />
         <SectionNav
           game={game}
@@ -388,6 +429,7 @@ export function Dashboard({ data }: DashboardProps) {
 
         {hasGameData && isLftSection ? (
           <MarketFilterBar
+            gameSlug={gameSlug}
             statusFilter={marketStatusFilter}
             onStatusFilterChange={setMarketStatusFilter}
             roleFilter={marketRoleFilter}
@@ -584,7 +626,11 @@ export function Dashboard({ data }: DashboardProps) {
             Last local update:{" "}
             {hasGameData ? data.lastUpdated ?? "未取得" : "—"}
             <span className="mx-2 text-zinc-800">|</span>
-            npm run update
+            {gameSlug === "league-of-legends"
+              ? "npm run update:lol"
+              : gameSlug === "identity-v"
+                ? "npm run update:idv"
+                : "npm run update:valo"}
           </p>
         </footer>
       </main>

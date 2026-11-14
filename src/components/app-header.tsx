@@ -8,6 +8,7 @@ type AppHeaderProps = {
   onGameChange: (slug: string) => void;
   lastUpdated: string | null;
   lastUpdateSource: string | null;
+  updateCommand?: string;
 };
 
 const TAB_BASE =
@@ -18,6 +19,7 @@ export function AppHeader({
   onGameChange,
   lastUpdated,
   lastUpdateSource,
+  updateCommand = "npm run update",
 }: AppHeaderProps) {
   const ActiveIcon = activeGame.icon;
 
@@ -113,7 +115,7 @@ export function AppHeader({
             title="ターミナルで実行するとローカル SQLite を更新します"
           >
             <Terminal className="h-3 w-3 text-brand" />
-            <code className="font-mono">npm run update</code>
+            <code className="font-mono">{updateCommand}</code>
           </div>
         </div>
       </div>

@@ -52,6 +52,12 @@ const ROLE_COLORS: Record<string, string> = {
     "border-amber-400/25 bg-amber-400/[0.08] text-amber-300",
   Flex: "border-violet-400/25 bg-violet-400/[0.08] text-violet-300",
   IGL: "border-fuchsia-400/25 bg-fuchsia-400/[0.08] text-fuchsia-300",
+  Top: "border-red-400/25 bg-red-400/[0.08] text-red-300",
+  Jungle: "border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-300",
+  Mid: "border-amber-400/25 bg-amber-400/[0.08] text-amber-300",
+  Bot: "border-sky-400/25 bg-sky-400/[0.08] text-sky-300",
+  ADC: "border-sky-400/25 bg-sky-400/[0.08] text-sky-300",
+  Support: "border-violet-400/25 bg-violet-400/[0.08] text-violet-300",
   Coach:
     "border-zinc-500/30 bg-zinc-500/[0.08] text-zinc-300",
   Manager:

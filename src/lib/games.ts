@@ -78,7 +78,8 @@ export const GAME_DEFINITIONS: readonly GameDefinition[] = [
     regionLabel: "Korea",
     heroTitle: "LCK プロチーム追跡",
     description:
-      "韓国 LCK 出場全チームを対象に、ロスター・移籍・順位表を追跡するタイトルです。ナビゲーションとテーマは先行して実装済みで、データ取得は Phase 5-1 で接続します。",
+      "韓国 LCK 出場全10チームのロスター、LFT / FA 選手、移籍・契約の履歴をひとつのダッシュボードで追跡。データは外部クラウドに送信されません。",
+
     themeClass: "theme-lol",
     themeName: "Gold & Cyan",
     dotClassName:
@@ -89,7 +90,7 @@ export const GAME_DEFINITIONS: readonly GameDefinition[] = [
       "Top / Jungle / Mid / Bot / Support",
       "Liquipedia League of Legends API",
     ],
-    hasLocalData: false,
+    hasLocalData: true,
     icon: Swords,
   },
   {

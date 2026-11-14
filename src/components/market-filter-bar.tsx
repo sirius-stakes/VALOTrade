@@ -17,6 +17,12 @@ export type MarketRoleFilter =
   | "Controller"
   | "Sentinel"
   | "Flex"
+  | "Top"
+  | "Jungle"
+  | "Mid"
+  | "Bot"
+  | "ADC"
+  | "Support"
   | "Coach";
 
 const STATUS_OPTIONS: Array<{
@@ -29,17 +35,33 @@ const STATUS_OPTIONS: Array<{
   { value: "inactive-bench", label: "Inactive・Bench" },
 ];
 
-const ROLE_OPTIONS: Array<{ value: MarketRoleFilter; label: string }> = [
-  { value: "all", label: "All Roles" },
-  { value: "Duelist", label: "Duelist" },
-  { value: "Initiator", label: "Initiator" },
-  { value: "Controller", label: "Controller" },
-  { value: "Sentinel", label: "Sentinel" },
-  { value: "Flex", label: "Flex" },
-  { value: "Coach", label: "Coach" },
-];
+const ROLE_OPTIONS_BY_GAME: Record<
+  string,
+  Array<{ value: MarketRoleFilter; label: string }>
+> = {
+  "league-of-legends": [
+    { value: "all", label: "All Roles" },
+    { value: "Top", label: "Top" },
+    { value: "Jungle", label: "Jungle" },
+    { value: "Mid", label: "Mid" },
+    { value: "Bot", label: "Bot" },
+    { value: "ADC", label: "ADC" },
+    { value: "Support", label: "Support" },
+    { value: "Coach", label: "Coach" },
+  ],
+  default: [
+    { value: "all", label: "All Roles" },
+    { value: "Duelist", label: "Duelist" },
+    { value: "Initiator", label: "Initiator" },
+    { value: "Controller", label: "Controller" },
+    { value: "Sentinel", label: "Sentinel" },
+    { value: "Flex", label: "Flex" },
+    { value: "Coach", label: "Coach" },
+  ],
+};
 
 type MarketFilterBarProps = {
+  gameSlug: string;
   statusFilter: MarketStatusFilter;
   onStatusFilterChange: (value: MarketStatusFilter) => void;
   roleFilter: MarketRoleFilter;
@@ -50,6 +72,7 @@ type MarketFilterBarProps = {
 };
 
 export function MarketFilterBar({
+  gameSlug,
   statusFilter,
   onStatusFilterChange,
   roleFilter,
@@ -58,6 +81,7 @@ export function MarketFilterBar({
   onShowStaffChange,
   resultCount,
 }: MarketFilterBarProps) {
+  const ROLE_OPTIONS = ROLE_OPTIONS_BY_GAME[gameSlug] ?? ROLE_OPTIONS_BY_GAME.default;
   return (
     <div className="border-b border-zinc-800/70 bg-zinc-950/40">
       <div className="mx-auto flex max-w-[1600px] flex-col gap-3 px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between">

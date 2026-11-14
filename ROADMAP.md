@@ -60,7 +60,7 @@
 ---
 
 ## Phase 5: 他タイトルの追加（LoL LCK ＋ 第五人格 IJL）
-- [ ] **Phase 5-1: League of Legends（韓国 LCK）の実装**
+- [x] **Phase 5-1: League of Legends（韓国 LCK）の実装**
   - `[https://liquipedia.net/leagueoflegends/api.php](https://liquipedia.net/leagueoflegends/api.php)` からのLCK全10チーム取得スクリプト（`npm run update:lol`）。
   - LoL専用ロール（`Top`, `Jungle`, `Mid`, `Bot`, `Support`）のバッジ・アイコン表示。
 - [ ] **Phase 5-2: 第五人格 / Identity V（日本 IJL）の実装**

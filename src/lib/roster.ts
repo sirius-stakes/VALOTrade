@@ -10,6 +10,7 @@ import {
 } from "@/lib/roles";
 import { isImportCountry } from "@/lib/nationality";
 import { isTargetTeamName } from "@/lib/target-teams";
+import { isLolTargetTeamName } from "@/lib/lol-teams";
 import type {
   DashboardData,
   MembershipDto,
@@ -114,17 +115,23 @@ function comparePlayers(a: PlayerDto, b: PlayerDto) {
   return a.handle.localeCompare(b.handle, "ja");
 }
 
-function isTargetRelatedPlayer(player: PlayerWithMemberships) {
+function isTargetRelatedPlayer(
+  player: PlayerWithMemberships,
+  gameSlug: string,
+) {
+  const isTarget =
+    gameSlug === "league-of-legends" ? isLolTargetTeamName : isTargetTeamName;
   return player.memberships.some(
     (membership) =>
-      isTargetTeamName(membership.team.name) ||
-      isTargetTeamName(membership.team.shortName),
+      isTarget(membership.team.name) || isTarget(membership.team.shortName),
   );
 }
 
-export async function getDashboardData(): Promise<DashboardData | null> {
+export async function getDashboardData(
+  gameSlug: string,
+): Promise<DashboardData | null> {
   const game = await prisma.game.findUnique({
-    where: { slug: "valorant" },
+    where: { slug: gameSlug },
     include: {
       players: {
         include: {
@@ -198,7 +205,7 @@ export async function getDashboardData(): Promise<DashboardData | null> {
   const playerMap = new Map<string, PlayerDto>();
   for (const player of game.players) {
     if (
-      !isTargetRelatedPlayer(player) &&
+      !isTargetRelatedPlayer(player, gameSlug) &&
       !targetEventPlayerIds.has(player.id)
     ) {
       continue;
@@ -211,9 +218,11 @@ export async function getDashboardData(): Promise<DashboardData | null> {
     playerMap.set(player.id, dto);
   }
 
+  const isTarget =
+    gameSlug === "league-of-legends" ? isLolTargetTeamName : isTargetTeamName;
+
   const targetTeams = game.teams.filter(
-    (team) =>
-      isTargetTeamName(team.name) || isTargetTeamName(team.shortName),
+    (team) => isTarget(team.name) || isTarget(team.shortName),
   );
 
   const teams: TeamDto[] = targetTeams.map((team) => {
@@ -276,9 +285,7 @@ export async function getDashboardData(): Promise<DashboardData | null> {
 
   const transfers: TransferEventDto[] = game.transferEvents
     .filter(
-      (event) =>
-        isTargetTeamName(event.fromTeamName) ||
-        isTargetTeamName(event.toTeamName),
+      (event) => isTarget(event.fromTeamName) || isTarget(event.toTeamName),
     )
     .filter((event) => isCompetitiveRole(event.role))
     .map((event) => ({
