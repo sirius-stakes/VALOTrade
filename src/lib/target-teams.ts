@@ -1,6 +1,5 @@
 /**
- * 取得・保持・表示の対象となる VALORANT チーム定義。
- * Phase 4-1 では VCT Pacific 全12チームと日本 Tier2（VCJ）主要チームを対象とする。
+ * 取得・保持・表示の対象となる VALORANT 日本チーム定義。
  * スクレイピング CLI とダッシュボードの両方から参照する。
  */
 
@@ -12,14 +11,14 @@ export type TargetTeamDefinition = {
   accent: string;
   /** public/logos 配下に保存するロゴ画像のファイル名（拡張子なし） */
   logoSlug: string;
-  /** Prisma Region.code と対応する地域識別子 */
+  /** 表示用の地域グループ */
   regionCode: string;
 };
 
 // ───────────────────────────────────────────────────────────────
-// VCT Pacific（12チーム）
+// VCT Pacific 日本チーム
 // ───────────────────────────────────────────────────────────────
-export const VALO_PACIFIC_TEAMS: readonly TargetTeamDefinition[] = [
+export const VALO_PACIFIC_JP_TEAMS: readonly TargetTeamDefinition[] = [
   {
     name: "ZETA DIVISION",
     shortName: "ZETA",
@@ -27,7 +26,7 @@ export const VALO_PACIFIC_TEAMS: readonly TargetTeamDefinition[] = [
     liquipediaPage: "ZETA_DIVISION",
     accent: "violet",
     logoSlug: "zeta",
-    regionCode: "Pacific",
+    regionCode: "VCT Pacific (JP)",
   },
   {
     name: "DetonatioN FocusMe",
@@ -36,102 +35,12 @@ export const VALO_PACIFIC_TEAMS: readonly TargetTeamDefinition[] = [
     liquipediaPage: "DetonatioN_FocusMe",
     accent: "red",
     logoSlug: "dfm",
-    regionCode: "Pacific",
-  },
-  {
-    name: "DRX",
-    shortName: "DRX",
-    aliases: ["DRX"],
-    liquipediaPage: "DRX",
-    accent: "cyan",
-    logoSlug: "drx",
-    regionCode: "Pacific",
-  },
-  {
-    name: "Gen.G Esports",
-    shortName: "GEN",
-    aliases: ["Gen.G", "Gen.G Esports", "GEN"],
-    liquipediaPage: "Gen.G_Esports",
-    accent: "gold",
-    logoSlug: "geng",
-    regionCode: "Pacific",
-  },
-  {
-    name: "T1",
-    shortName: "T1",
-    aliases: ["T1"],
-    liquipediaPage: "T1",
-    accent: "red",
-    logoSlug: "t1",
-    regionCode: "Pacific",
-  },
-  {
-    name: "Paper Rex",
-    shortName: "PRX",
-    aliases: ["PRX", "Paper Rex"],
-    liquipediaPage: "Paper_Rex",
-    accent: "amber",
-    logoSlug: "prx",
-    regionCode: "Pacific",
-  },
-  {
-    name: "Talon Esports",
-    shortName: "TLN",
-    aliases: ["TLN", "Talon Esports"],
-    liquipediaPage: "Talon_Esports",
-    accent: "orange",
-    logoSlug: "talon",
-    regionCode: "Pacific",
-  },
-  {
-    name: "Team Secret",
-    shortName: "TS",
-    aliases: ["TS", "Team Secret"],
-    liquipediaPage: "Team_Secret",
-    accent: "emerald",
-    logoSlug: "teamsecret",
-    regionCode: "Pacific",
-  },
-  {
-    name: "Global Esports",
-    shortName: "GE",
-    aliases: ["GE", "Global Esports"],
-    liquipediaPage: "Global_Esports",
-    accent: "pink",
-    logoSlug: "ge",
-    regionCode: "Pacific",
-  },
-  {
-    name: "Rex Regum Qeon",
-    shortName: "RRQ",
-    aliases: ["RRQ", "Rex Regum Qeon"],
-    liquipediaPage: "Rex_Regum_Qeon",
-    accent: "amber",
-    logoSlug: "rrq",
-    regionCode: "Pacific",
-  },
-  {
-    name: "Nongshim RedForce",
-    shortName: "NS",
-    aliases: ["NS", "Nongshim RedForce", "BLEED Esports", "BLEED"],
-    liquipediaPage: "Nongshim_RedForce",
-    accent: "red",
-    logoSlug: "nongshim",
-    regionCode: "Pacific",
-  },
-  {
-    name: "BOOM Esports",
-    shortName: "BOOM",
-    aliases: ["BOOM", "BOOM Esports"],
-    liquipediaPage: "BOOM_Esports",
-    accent: "orange",
-    logoSlug: "boom",
-    regionCode: "Pacific",
+    regionCode: "VCT Pacific (JP)",
   },
 ];
 
 // ───────────────────────────────────────────────────────────────
-// 日本 Tier2 / VCJ 主要チーム（8チーム）
+// 日本 Tier2 / VCJ 主要チーム
 // ───────────────────────────────────────────────────────────────
 export const VALO_JP_TIER2_TEAMS: readonly TargetTeamDefinition[] = [
   {
@@ -141,7 +50,7 @@ export const VALO_JP_TIER2_TEAMS: readonly TargetTeamDefinition[] = [
     liquipediaPage: "FENNEL",
     accent: "orange",
     logoSlug: "fennel",
-    regionCode: "JP Tier 2",
+    regionCode: "JP Tier 2 (VCJ)",
   },
   {
     name: "MURASH GAMING",
@@ -150,16 +59,16 @@ export const VALO_JP_TIER2_TEAMS: readonly TargetTeamDefinition[] = [
     liquipediaPage: "MURASH_GAMING",
     accent: "emerald",
     logoSlug: "murash",
-    regionCode: "JP Tier 2",
+    regionCode: "JP Tier 2 (VCJ)",
   },
   {
     name: "RIDDLE",
     shortName: "RIDDLE",
     aliases: ["RIDDLE"],
     liquipediaPage: "RIDDLE",
-    accent: "violet",
+    accent: "cyan",
     logoSlug: "riddle",
-    regionCode: "JP Tier 2",
+    regionCode: "JP Tier 2 (VCJ)",
   },
   {
     name: "SCARZ",
@@ -168,7 +77,7 @@ export const VALO_JP_TIER2_TEAMS: readonly TargetTeamDefinition[] = [
     liquipediaPage: "SCARZ",
     accent: "red",
     logoSlug: "scarz",
-    regionCode: "JP Tier 2",
+    regionCode: "JP Tier 2 (VCJ)",
   },
   {
     name: "Sengoku Gaming",
@@ -177,16 +86,16 @@ export const VALO_JP_TIER2_TEAMS: readonly TargetTeamDefinition[] = [
     liquipediaPage: "Sengoku_Gaming",
     accent: "gold",
     logoSlug: "sengoku",
-    regionCode: "JP Tier 2",
+    regionCode: "JP Tier 2 (VCJ)",
   },
   {
     name: "REJECT",
     shortName: "RC",
     aliases: ["RC", "REJECT"],
     liquipediaPage: "REJECT",
-    accent: "cyan",
+    accent: "purple",
     logoSlug: "reject",
-    regionCode: "JP Tier 2",
+    regionCode: "JP Tier 2 (VCJ)",
   },
   {
     name: "NOEZ FOXX",
@@ -195,7 +104,7 @@ export const VALO_JP_TIER2_TEAMS: readonly TargetTeamDefinition[] = [
     liquipediaPage: "NOEZ_FOXX",
     accent: "pink",
     logoSlug: "noez",
-    regionCode: "JP Tier 2",
+    regionCode: "JP Tier 2 (VCJ)",
   },
   {
     name: "NORTHEPTION",
@@ -204,15 +113,15 @@ export const VALO_JP_TIER2_TEAMS: readonly TargetTeamDefinition[] = [
     liquipediaPage: "NORTHEPTION",
     accent: "emerald",
     logoSlug: "northeption",
-    regionCode: "JP Tier 2",
+    regionCode: "JP Tier 2 (VCJ)",
   },
 ];
 
 // ───────────────────────────────────────────────────────────────
-// 全対象チーム
+// 全対象チーム（日本チームのみ）
 // ───────────────────────────────────────────────────────────────
 export const TARGET_TEAMS: readonly TargetTeamDefinition[] = [
-  ...VALO_PACIFIC_TEAMS,
+  ...VALO_PACIFIC_JP_TEAMS,
   ...VALO_JP_TIER2_TEAMS,
 ];
 

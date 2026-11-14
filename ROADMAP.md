@@ -6,7 +6,7 @@
 ---
 
 ## 全体対象範囲（グランドデザイン）
-1. **VALORANT**: 全地域（VCT 4地域: Pacific, Americas, EMEA, China ＋ 日本Tier2 VCJ主要チーム）※他地域Tier2は除外
+1. **VALORANT**: 日本チームに限定（VCT Pacific 日本代表 / 日本 Tier2 VCJ 主要チーム）
 2. **League of Legends**: 韓国地域（LCK 出場全チーム）
 3. **第五人格 / Identity V**: 日本地域（IJL 出場全チーム）
 
@@ -43,17 +43,12 @@
 
 ---
 
-## Phase 4: VALORANT 全地域拡大＆詳細データ取得
-- [x] **Phase 4-1: VCT Pacific & JP Tier2（VCJ）のロスター・ロール・国籍取得**
-  - Pacific 全12チームおよび日本Tier2主要チームのLiquipedia取得。
+## Phase 4: VALORANT 日本チームの詳細データ取得
+- [x] **Phase 4-1: VCT Pacific 日本代表 & JP Tier2（VCJ）のロスター・ロール・国籍取得**
+  - VCT Pacific 日本代表チームおよび日本Tier2主要チームのLiquipedia取得。
   - ロール（Duelist / Initiator / Controller / Sentinel / Flex / IGL）バッジ・アイコンおよび国籍コードの自動抽出。
   - 地域別個別更新コマンド（`npm run update:valo-jp`, `npm run update:valo-pacific` 等）の整備。
-- [ ] **Phase 4-2: VCT Americas & EMEA の取得対応**
-  - Americas（12チーム）および EMEA（12チーム）の取得設定追加（`npm run update:valo-americas`, `npm run update:valo-emea`）。
-- [ ] **Phase 4-3: VCT China の取得対応＆「LFT / FA 市場」専用ビュー実装**
-  - China（12チーム）の取得設定追加（`npm run update:valo-china`）。
-  - サブタブ `[ LFT / FA 市場 ]` の実装（ロール別・地域別フィルター付きのフリーエージェント専用一覧画面）。
-- [ ] **Phase 4-4: チームの「過去大会実績」＆「直近・次戦マッチ＋YouTubeリンク」取得実装**
+- [ ] **Phase 4-2: チームの「過去大会実績」＆「直近・次戦マッチ＋YouTubeリンク」取得実装**
   - チーム個別ページから `Results`（大会実績）と `Matches`（直近結果・次戦予定）を抽出・保存。
   - 試合情報にLiquipediaから抽出した配信・VOD URLを紐付け、未登録の場合は公式YouTubeチャンネルまたは試合検索URLへフォールバックする `[ Watch / VOD ]` リンクを生成。
   - トップ画面上部の横スクロール「マッチティッカー」およびチーム詳細モーダルへ反映。

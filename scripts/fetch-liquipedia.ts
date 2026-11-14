@@ -31,7 +31,7 @@ import { getRosterCategory, isRosterRole } from "../src/lib/roles";
 import {
   TARGET_TEAMS,
   VALO_JP_TIER2_TEAMS,
-  VALO_PACIFIC_TEAMS,
+  VALO_PACIFIC_JP_TEAMS,
   type TargetTeamDefinition,
 } from "../src/lib/target-teams";
 
@@ -1635,7 +1635,7 @@ async function fetchFromFixture(
 function selectTeams(options: CliOptions) {
   const baseTeams =
     options.region === "pacific"
-      ? [...VALO_PACIFIC_TEAMS]
+      ? [...VALO_PACIFIC_JP_TEAMS]
       : options.region === "jp"
         ? [...VALO_JP_TIER2_TEAMS]
         : [...TARGET_TEAMS];

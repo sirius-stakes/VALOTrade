@@ -113,8 +113,20 @@ export function Dashboard({ data }: DashboardProps) {
     setSelectedTeam(null);
   };
 
+  const REGION_ORDER = ["VCT Pacific (JP)", "JP Tier 2 (VCJ)"];
+
   const availableRegions = useMemo(
-    () => Array.from(new Set(data.teams.map((team) => team.regionCode))).sort(),
+    () =>
+      Array.from(new Set(data.teams.map((team) => team.regionCode))).sort(
+        (a, b) => {
+          const indexA = REGION_ORDER.indexOf(a);
+          const indexB = REGION_ORDER.indexOf(b);
+          if (indexA === -1 && indexB === -1) return a.localeCompare(b);
+          if (indexA === -1) return 1;
+          if (indexB === -1) return -1;
+          return indexA - indexB;
+        },
+      ),
     [data.teams],
   );
 

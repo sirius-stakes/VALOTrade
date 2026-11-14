@@ -52,9 +52,9 @@ export type TeamDto = {
   accent: string;
   /** 選手 + コーチの人数（スタッフを除く） */
   playerCount: number;
-  /** 日本国籍以外の現ロスター選手数 */
+  /** 日本国籍以外の現ロスター選手数（チーム詳細モーダルで使用） */
   importCount: number;
-  /** Import バッジのツールチップに使う対象選手 */
+  /** Import 数の計算対象選手（チーム詳細モーダルで使用） */
   importPlayers: PlayerDto[];
   players: PlayerDto[];
   staff: PlayerDto[];

@@ -128,7 +128,7 @@ export function ControlBar({
               type="button"
               role="switch"
               aria-checked={showStaff}
-              aria-label="マネージャー・アナリストを表示"
+              aria-label="マネージャー・アナリスト・ストリーマー等を表示"
               onClick={() => onShowStaffChange?.(!showStaff)}
               className={cn(
                 "inline-flex h-7 shrink-0 items-center gap-2 rounded-md border px-2.5 text-[10.5px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30",
@@ -139,7 +139,7 @@ export function ControlBar({
             >
               <UserCog className="h-3.5 w-3.5" />
               <span className="whitespace-nowrap">
-                マネージャー・アナリストを表示
+                マネージャー・アナリスト等を表示
               </span>
               <span
                 aria-hidden

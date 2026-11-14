@@ -3,14 +3,12 @@
 import {
   ChevronRight,
   ExternalLink,
-  Globe2,
   Shield,
   Star,
   UserCog,
   Users,
 } from "lucide-react";
 
-import { NationalityFlag } from "@/components/nationality-flag";
 import { RoleTag, StatusBadge } from "@/components/status-badge";
 import { PlayerAvatar } from "@/components/player-avatar";
 import { TeamLogo } from "@/components/team-logo";
@@ -37,9 +35,6 @@ export function TeamCard({
   onSelectPlayer,
 }: TeamCardProps) {
   const accent = getTeamAccent(team.accent);
-  const importHandles = team.importPlayers
-    .map((player) => player.handle)
-    .join(", ");
 
   return (
     <article
@@ -143,19 +138,6 @@ export function TeamCard({
             <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-600">
               {team.shortName}
             </span>
-            {team.importCount > 0 ? (
-              <Badge
-                title={
-                  importHandles
-                    ? `Import: ${importHandles}`
-                    : "Import players"
-                }
-                className="gap-1 border-sky-400/25 bg-sky-400/[0.07] text-sky-300"
-              >
-                <Globe2 className="h-2.5 w-2.5" />
-                Import {team.importCount}
-              </Badge>
-            ) : null}
           </div>
         </div>
       </header>
@@ -202,7 +184,7 @@ export function TeamCard({
             </div>
           ) : (
             <p className="px-3 pb-1 pt-2 text-[10px] text-zinc-700">
-              マネージャー・アナリストの登録はありません
+              マネージャー・アナリスト・ストリーマー等の登録はありません
             </p>
           )
         ) : null}
@@ -240,10 +222,13 @@ function RosterRow({
       aria-label={`${player.handle} の詳細を開く`}
       className="group/player flex w-full items-center gap-2.5 rounded-lg border border-transparent px-2 py-1.5 text-left transition-colors hover:border-zinc-700/60 hover:bg-zinc-800/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
     >
-      <PlayerAvatar handle={player.handle} size="sm" />
+      <PlayerAvatar
+        handle={player.handle}
+        avatarUrl={player.avatarUrl}
+        size="sm"
+      />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-1.5">
-          <NationalityFlag country={player.country} />
           <span className="truncate text-[13px] font-semibold text-zinc-200 transition-colors group-hover/player:text-white">
             {player.handle}
           </span>
@@ -255,11 +240,6 @@ function RosterRow({
         </div>
         <div className="mt-0.5 flex items-center gap-1.5">
           <RoleTag role={player.currentRole ?? "Member"} />
-          <span className="truncate text-[10px] text-zinc-600">
-            {player.memberships.length > 1
-              ? `${player.memberships.length} teams`
-              : "New"}
-          </span>
         </div>
       </div>
       <StatusBadge status={player.status} />

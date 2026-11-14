@@ -66,7 +66,11 @@ export function PlayerModal({ player, open, onOpenChange }: PlayerModalProps) {
               Player Profile
             </p>
             <div className="mt-3 flex items-start gap-4">
-              <PlayerAvatar handle={player.handle} size="lg" />
+              <PlayerAvatar
+                handle={player.handle}
+                avatarUrl={player.avatarUrl}
+                size="lg"
+              />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2.5">
                   <NationalityFlag
