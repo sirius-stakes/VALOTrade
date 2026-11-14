@@ -358,7 +358,9 @@ function classifyTableKind(text: string): TableKind {
   }
   if (/former|ex-/.test(normalized)) return "former";
   if (/inactive/.test(normalized)) return "inactive";
-  if (/organization|staff|management/.test(normalized)) {
+  if (/organization|staff|management|content\s*creators?|streamers?/.test(
+    normalized,
+  )) {
     return "organization";
   }
   if (/stand-?in|temporary|substitute|reserve|bench/.test(normalized)) {
@@ -406,7 +408,7 @@ function resolveRole(kind: TableKind, roleText: string) {
   return text;
 }
 
-const STREAMER_PATTERN = /streamer|content\s*creator/i;
+const STREAMER_PATTERN = /streamer|content\s*creator|creator/i;
 
 function isStreamerRole(role: string | null | undefined) {
   if (!role) return false;
@@ -589,6 +591,7 @@ function parseTableBlock(
     /leave|end|inactive|depart|退団|離脱|休止/i,
   ]);
   const statusIndex = findColumn(headers, [/status|状態/i]);
+  const noteIndex = findColumn(headers, [/note|備考|comment/i]);
 
   // ロール列の見出しが空欄になっている Liquipedia の表に対応する。
   // 例: ID | (flag) | Name | (role) | Join Date | Leave Date
@@ -605,6 +608,8 @@ function parseTableBlock(
   const contextText = [block.title, block.heading, block.caption]
     .filter(Boolean)
     .join(" ");
+  const isContentCreatorSection =
+    /content\s*creators?|streamers?/i.test(contextText);
   let kind = classifyTableKind(contextText);
 
   if (kind === "unknown") {
@@ -652,13 +657,20 @@ function parseTableBlock(
       statusIndex >= 0
         ? clean(cellAt($, cells, statusIndex)?.text())
         : "";
+    const noteFromColumn =
+      noteIndex >= 0
+        ? clean(cellAt($, cells, noteIndex)?.text())
+        : "";
 
-    // Streamer / Content Creator は role 列または行テキストから検出し、
+    // Streamer / Content Creator は role 列・備考欄・行テキストから検出し、
     // staffCategory="STAFF" として扱うため role テキストを統一する。
-    const combinedRoleText = `${roleText} ${statusFromColumn}`;
-    const detectedRole = isStreamerRole(combinedRoleText) || isStreamerRole(rowText)
-      ? "Streamer"
-      : combinedRoleText;
+    const combinedRoleText = `${roleText} ${statusFromColumn} ${noteFromColumn}`;
+    const detectedRole =
+      isStreamerRole(combinedRoleText) ||
+      isStreamerRole(rowText) ||
+      (isContentCreatorSection && !roleText && !statusFromColumn && !noteFromColumn)
+        ? "Streamer"
+        : combinedRoleText;
 
     const status = resolveStatus(kind, detectedRole, rowText);
     const role = resolveRole(kind, detectedRole);

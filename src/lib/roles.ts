@@ -14,7 +14,7 @@ const PLAYER_ROLE_PATTERN =
 const COACH_ROLE_PATTERN = /coach/i;
 
 const STAFF_ROLE_PATTERN =
-  /manager|analyst|director|\bceo\b|owner|streamer|content|social|operations|psychologist|nutritionist|strategist|head\s+of/i;
+  /manager|analyst|director|\bceo\b|owner|streamer|content\s*creator|creator|content|social|operations|psychologist|nutritionist|strategist|head\s+of/i;
 
 export function isCoachRole(role: string | null | undefined) {
   return Boolean(role && COACH_ROLE_PATTERN.test(role));
@@ -48,6 +48,17 @@ export function getRosterCategory(
   if (isCoachRole(role)) return "COACH";
   if (isStaffRole(role)) return "STAFF";
   return "PLAYER";
+}
+
+const STREAMER_LIKE_PATTERN = /streamer|content\s*creator|creator/i;
+
+/**
+ * ストリーマー / コンテンツクリエイター系の役職かどうか。
+ * UI 側でデフォルト非表示にするスタッフ判定の二重ガードとして使用する。
+ */
+export function isStreamerLikeRole(role: string | null | undefined) {
+  if (!role) return false;
+  return STREAMER_LIKE_PATTERN.test(role);
 }
 
 /** チームカード内の並び順: Active → Sub → LFT/FA/Inactive → Coach → Staff。 */

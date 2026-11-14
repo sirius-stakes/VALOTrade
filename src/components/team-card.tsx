@@ -13,6 +13,7 @@ import { RoleTag, StatusBadge } from "@/components/status-badge";
 import { PlayerAvatar } from "@/components/player-avatar";
 import { TeamLogo } from "@/components/team-logo";
 import { Badge } from "@/components/ui/badge";
+import { isStreamerLikeRole } from "@/lib/roles";
 import { getTeamAccent } from "@/lib/status";
 import type { PlayerDto, TeamDto } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -35,6 +36,17 @@ export function TeamCard({
   onSelectPlayer,
 }: TeamCardProps) {
   const accent = getTeamAccent(team.accent);
+
+  // ストリーマー / クリエイター系は staffCategory に関わらずスタッフ扱いで非表示にする。
+  const streamerLikePlayers = team.players.filter((player) =>
+    isStreamerLikeRole(player.currentRole),
+  );
+  const visiblePlayers = team.players.filter(
+    (player) => !isStreamerLikeRole(player.currentRole),
+  );
+  const visibleStaff = showStaff
+    ? [...team.staff, ...streamerLikePlayers]
+    : [];
 
   return (
     <article
@@ -149,8 +161,8 @@ export function TeamCard({
       ) : null}
 
       <div className="relative flex-1 space-y-0.5 px-2 pb-2">
-        {team.players.length > 0 ? (
-          team.players.map((player) => (
+        {visiblePlayers.length > 0 ? (
+          visiblePlayers.map((player) => (
             <RosterRow
               key={player.id}
               player={player}
@@ -165,16 +177,16 @@ export function TeamCard({
         )}
 
         {showStaff ? (
-          team.staff.length > 0 ? (
+          visibleStaff.length > 0 ? (
             <div className="mt-1 border-t border-zinc-800/60 pt-1.5">
               <p className="flex items-center gap-1.5 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.2em] text-zinc-600">
                 <UserCog className="h-3 w-3" />
                 Staff
                 <span className="font-mono text-[9px] tracking-normal text-zinc-700">
-                  {team.staff.length}
+                  {visibleStaff.length}
                 </span>
               </p>
-              {team.staff.map((member) => (
+              {visibleStaff.map((member) => (
                 <RosterRow
                   key={member.id}
                   player={member}
@@ -193,10 +205,10 @@ export function TeamCard({
       <footer className="mt-auto flex items-center justify-between gap-2 border-t border-zinc-800/70 bg-zinc-950/30 px-4 py-2.5">
         <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-zinc-600">
           <Users className="h-3 w-3" />
-          {team.players.length} members
+          {visiblePlayers.length} members
           {showStaff ? (
             <span className="text-zinc-700">
-              + {team.staff.length} staff
+              + {visibleStaff.length} staff
             </span>
           ) : null}
         </span>
