@@ -47,7 +47,7 @@
 - [x] **Phase 4-1: VCT Pacific 日本代表 & JP Tier2（VCJ）のロスター・ロール・国籍取得**
   - VCT Pacific 日本代表チームおよび日本Tier2主要チームのLiquipedia取得。
   - ロール（Duelist / Initiator / Controller / Sentinel / Flex / IGL）バッジ・アイコンおよび国籍コードの自動抽出。
-  - 地域別個別更新コマンド（`npm run update:valo-jp`, `npm run update:valo-pacific` 等）の整備。
+  - VALORANT 日本チーム一括更新コマンド（`npm run update:valo`）の整備。
 - [ ] **Phase 4-2: チームの「過去大会実績」＆「直近・次戦マッチ＋YouTubeリンク」取得実装**
   - チーム個別ページから `Results`（大会実績）と `Matches`（直近結果・次戦予定）を抽出・保存。
   - 試合情報にLiquipediaから抽出した配信・VOD URLを紐付け、未登録の場合は公式YouTubeチャンネルまたは試合検索URLへフォールバックする `[ Watch / VOD ]` リンクを生成。

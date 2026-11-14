@@ -1,16 +1,17 @@
 /**
- * Liquipedia (VALORANT) の MediaWiki API から対象 4 チームのロスターを取得し、
+ * Liquipedia (VALORANT) の MediaWiki API から日本の主要チームのロスターを取得し、
  * ローカル SQLite (Prisma) に Upsert する。
  *
  * 実行:
- *   npm run update                  # API から 4 チームを取得して DB 更新
- *   npm run update -- --dry-run     # 取得・解析のみ（DB 更新なし）
- *   npm run update -- --verbose     # 取得した全選手を表示
- *   npm run update -- --fixture=... --team=ZETA_DIVISION --dry-run
+ *   npm run update:valo                  # API から日本チームを取得して DB 更新
+ *   npm run update:valo -- --dry-run     # 取得・解析のみ（DB 更新なし）
+ *   npm run update:valo -- --verbose     # 取得した全選手を表示
+ *   npm run update:valo -- --force       # 24時間キャッシュを無視して強制更新
+ *   npm run update:fixture               # ローカル fixture で動作確認
  *
  * Liquipedia の利用規約に合わせ、以下を必ず守る:
- *  - 独自の User-Agent（連絡先入り）と Accept-Encoding: gzip を付与する
- *  - リクエスト間は最低 3 秒あける（自動化された連続アクセスを避ける）
+ *  - 独自の User-Agent（連絡先先入り）と Accept-Encoding: gzip を付与する
+ *  - リクエスト間は最低 30 秒あける（IP 制限・レート制限を徹底回避）
  *  - captcha / Turnstile を回避するような処理は行わない
  */
 
@@ -30,8 +31,6 @@ import { getCountryMeta } from "../src/lib/nationality";
 import { getRosterCategory, isRosterRole } from "../src/lib/roles";
 import {
   TARGET_TEAMS,
-  VALO_JP_TIER2_TEAMS,
-  VALO_PACIFIC_JP_TEAMS,
   type TargetTeamDefinition,
 } from "../src/lib/target-teams";
 
@@ -43,20 +42,23 @@ const BASE_URL = "https://liquipedia.net";
 const API_URL = `${BASE_URL}/valorant/api.php`;
 const PAGE_BASE_URL = `${BASE_URL}/valorant`;
 const LOGO_DIR = path.join(process.cwd(), "public", "logos");
+const PLAYER_AVATAR_DIR = path.join(process.cwd(), "public", "players");
 const DEFAULT_USER_AGENT =
   "ValorantRosterApp/1.0 (local-personal-tool; contact@example.com)";
 const USER_AGENT =
   process.env.LIQUIPEDIA_USER_AGENT?.trim() || DEFAULT_USER_AGENT;
-const MIN_REQUEST_INTERVAL_MS = 3000;
+const MIN_REQUEST_INTERVAL_MS = 30000;
+const TEAM_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 type CliOptions = {
   dryRun: boolean;
   verbose: boolean;
   debug: boolean;
+  force: boolean;
   fixture?: string;
   teamFilter?: string;
-  /** 取得対象地域。未指定時は全地域。 */
-  region?: "pacific" | "jp" | "all";
+  /** 取得対象地域。valo=VALORANT 日本チーム、未指定時は valo。 */
+  region?: "valo" | "all";
   timeoutMs: number;
   delayMs: number;
 };
@@ -88,6 +90,8 @@ type RosterEntry = {
   isCurrent: boolean;
   announcementUrl: string | null;
   tableLabel: string;
+  /** 選手顔写真の Liquipedia 画像 URL。未検出なら null。 */
+  avatarSourceUrl: string | null;
 };
 
 type TeamRoster = {
@@ -170,23 +174,22 @@ function parseArgs(argv: string[]): CliOptions {
   const delayMs = Math.max(
     MIN_REQUEST_INTERVAL_MS,
     Number.parseInt(
-      getOption("delay") ?? process.env.LIQUIPEDIA_DELAY_MS ?? "3000",
+      getOption("delay") ?? process.env.LIQUIPEDIA_DELAY_MS ?? `${MIN_REQUEST_INTERVAL_MS}`,
       10,
     ) || MIN_REQUEST_INTERVAL_MS,
   );
 
-  const rawRegion = (getOption("region") ?? "").toLowerCase();
+  const rawRegion = (getOption("region") ?? "valo").toLowerCase();
   const region: CliOptions["region"] =
-    rawRegion === "pacific"
-      ? "pacific"
-      : rawRegion === "jp" || rawRegion === "jp-tier2"
-        ? "jp"
-        : "all";
+    rawRegion === "valo" || rawRegion === "jp" || rawRegion === "pacific"
+      ? "valo"
+      : "all";
 
   return {
     dryRun: hasFlag("dry-run"),
     verbose: hasFlag("verbose"),
     debug: hasFlag("debug"),
+    force: hasFlag("force"),
     fixture: getOption("fixture"),
     teamFilter: getOption("team"),
     region,
@@ -403,6 +406,13 @@ function resolveRole(kind: TableKind, roleText: string) {
   return text;
 }
 
+const STREAMER_PATTERN = /streamer|content\s*creator/i;
+
+function isStreamerRole(role: string | null | undefined) {
+  if (!role) return false;
+  return STREAMER_PATTERN.test(role);
+}
+
 function resolveStatus(
   kind: TableKind,
   roleText: string,
@@ -493,6 +503,29 @@ function extractCountry(
   // 国名やゆらぎを ISO 3166-1 alpha-2 風の2文字コードに正規化する。
   const meta = getCountryMeta(value);
   return meta?.code ?? value.toUpperCase();
+}
+
+function resolveImageUrl(src: string | undefined): string | null {
+  if (!src) return null;
+  const cleanSrc = clean(src);
+  if (/^https?:\/\//i.test(cleanSrc)) return cleanSrc;
+  if (cleanSrc.startsWith("//")) return `https:${cleanSrc}`;
+  if (cleanSrc.startsWith("/")) return `${BASE_URL}${cleanSrc}`;
+  return new URL(cleanSrc, BASE_URL).toString();
+}
+
+function extractPlayerAvatarUrl(
+  $: CheerioAPI,
+  playerCell: Cheerio<AnyNode>,
+): string | null {
+  if (!playerCell || playerCell.length === 0) return null;
+
+  // 選手セル内の画像を優先（.inline-player 内や直近の img）
+  const inline = playerCell.find(".inline-player").first();
+  const scope = inline.length > 0 ? inline : playerCell;
+  const image = scope.find("img").first();
+  const src = clean(image.attr("src") ?? image.attr("data-src"));
+  return resolveImageUrl(src);
 }
 
 function extractAnnouncementUrl(
@@ -619,12 +652,16 @@ function parseTableBlock(
       statusIndex >= 0
         ? clean(cellAt($, cells, statusIndex)?.text())
         : "";
-    const status = resolveStatus(
-      kind,
-      `${roleText} ${statusFromColumn}`,
-      rowText,
-    );
-    const role = resolveRole(kind, `${roleText} ${statusFromColumn}`);
+
+    // Streamer / Content Creator は role 列または行テキストから検出し、
+    // staffCategory="STAFF" として扱うため role テキストを統一する。
+    const combinedRoleText = `${roleText} ${statusFromColumn}`;
+    const detectedRole = isStreamerRole(combinedRoleText) || isStreamerRole(rowText)
+      ? "Streamer"
+      : combinedRoleText;
+
+    const status = resolveStatus(kind, detectedRole, rowText);
+    const role = resolveRole(kind, detectedRole);
 
     // 表示対象は選手（Player / Duelist / IGL 等）とコーチのみ。
     // Manager / Analyst / Streamer / CEO / Director などのスタッフはスキップする。
@@ -663,6 +700,7 @@ function parseTableBlock(
       isCurrent,
       announcementUrl: extractAnnouncementUrl($, rowNode),
       tableLabel: block.title || block.heading || kind,
+      avatarSourceUrl: extractPlayerAvatarUrl($, playerCell),
     });
   }
 
@@ -728,6 +766,7 @@ export function parseTeamRosterHtml(
         isCurrent: status === "ACTIVE" || status === "SUB",
         announcementUrl: extractAnnouncementUrl($, rowNode),
         tableLabel: "roster-card",
+        avatarSourceUrl: extractPlayerAvatarUrl($, scope),
       });
     }
   });
@@ -793,6 +832,23 @@ export function extractTeamLogoUrl(html: string): string | null {
   return null;
 }
 
+async function shouldSkipTeamUpdate(
+  team: TargetTeamDefinition,
+  options: CliOptions,
+): Promise<boolean> {
+  if (options.force || options.dryRun || options.fixture) return false;
+
+  const existing = await prisma.team.findFirst({
+    where: { shortName: team.shortName },
+    select: { updatedAt: true },
+  });
+
+  if (!existing) return false;
+
+  const elapsed = Date.now() - existing.updatedAt.getTime();
+  return elapsed < TEAM_CACHE_TTL_MS;
+}
+
 class LiquipediaError extends Error {
   constructor(
     message: string,
@@ -814,7 +870,7 @@ let lastRequestAt = 0;
 async function waitForRateLimit(options: CliOptions, purpose: string) {
   if (lastRequestAt === 0) return;
 
-  // 前回のレスポンス完了後、必ず指定時間（既定 3 秒）以上の
+  // 前回のレスポンス完了後、必ず指定時間（既定 30 秒）以上の
   // ウェイトを挟んでから次のリクエストを送る。
   console.log(
     `  ⏳ rate limit: ${(options.delayMs / 1000).toFixed(1)}s 待機してから ${purpose} を取得します`,
@@ -924,14 +980,11 @@ async function requestApi(
       const shouldRetry =
         attempt < maxAttempts &&
         error instanceof LiquipediaError &&
-        (error.kind === "RATE_LIMIT" || error.kind === "HTTP");
+        error.kind === "HTTP";
 
       if (!shouldRetry) break;
 
-      const backoff =
-        error.kind === "RATE_LIMIT"
-          ? options.delayMs * 2
-          : options.delayMs;
+      const backoff = options.delayMs;
       console.log(
         `  ⏳ 再試行 (${attempt}/${maxAttempts}): ${Math.ceil(
           backoff / 1000,
@@ -1008,6 +1061,52 @@ async function downloadTeamLogo(
     const message = error instanceof Error ? error.message : String(error);
     stats.warnings.push(`${team.name}: ロゴ取得に失敗 (${message})`);
     console.warn(`  ⚠️  ロゴ取得に失敗: ${team.name} (${message})`);
+    return null;
+  }
+}
+
+async function downloadPlayerAvatar(
+  handle: string,
+  sourceUrl: string,
+  options: CliOptions,
+  stats: ApplyStats,
+): Promise<string | null> {
+  if (!sourceUrl) return null;
+
+  try {
+    await mkdir(PLAYER_AVATAR_DIR, { recursive: true });
+    await waitForRateLimit(options, `${handle} の顔写真`);
+
+    const response = await fetch(sourceUrl, {
+      redirect: "follow",
+      signal: AbortSignal.timeout(options.timeoutMs),
+      headers: {
+        "User-Agent": USER_AGENT,
+        "Accept-Encoding": "gzip",
+        Accept: "image/*",
+      },
+    });
+    lastRequestAt = Date.now();
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} ${response.statusText}`);
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length === 0) {
+      throw new Error("画像データが空でした");
+    }
+
+    const safeHandle = handle.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const fileName = `${safeHandle}.png`;
+    await writeFile(path.join(PLAYER_AVATAR_DIR, fileName), buffer);
+    const localPath = `/players/${fileName}`;
+    console.log(`  🖼️  選手顔写真を保存しました: ${localPath}`);
+    return localPath;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    stats.warnings.push(`${handle}: 顔写真取得に失敗 (${message})`);
+    console.warn(`  ⚠️  顔写真取得に失敗: ${handle} (${message})`);
     return null;
   }
 }
@@ -1131,6 +1230,7 @@ type PlayerCache = Map<
     role: string | null;
     staffCategory: StaffCategory | null;
     status: PlayerStatus;
+    avatarUrl: string | null;
   }
 >;
 
@@ -1146,6 +1246,7 @@ async function loadPlayerCache(gameId: string): Promise<PlayerCache> {
       role: true,
       staffCategory: true,
       status: true,
+      avatarUrl: true,
     },
   });
 
@@ -1187,6 +1288,7 @@ async function ensurePlayer(
   regionId: string,
   cache: PlayerCache,
   stats: ApplyStats,
+  avatarUrl: string | null,
 ) {
   const key = entry.handle.toLowerCase();
   const cached = cache.get(key);
@@ -1200,6 +1302,7 @@ async function ensurePlayer(
       role?: string;
       staffCategory?: StaffCategory;
       status?: PlayerStatus;
+      avatarUrl?: string | null;
     } = {};
 
     if (entry.realName && entry.realName !== cached.realName) {
@@ -1220,6 +1323,9 @@ async function ensurePlayer(
     if (entry.isCurrent && entry.status !== cached.status) {
       data.status = entry.status;
     }
+    if (avatarUrl && !cached.avatarUrl) {
+      data.avatarUrl = avatarUrl;
+    }
 
     if (Object.keys(data).length > 0) {
       const updated = await prisma.player.update({
@@ -1232,6 +1338,7 @@ async function ensurePlayer(
       cached.role = updated.role;
       cached.staffCategory = updated.staffCategory;
       cached.status = updated.status;
+      cached.avatarUrl = updated.avatarUrl;
       stats.playersUpdated += 1;
     }
 
@@ -1249,6 +1356,7 @@ async function ensurePlayer(
       country: entry.country ?? "JP",
       nationality: entry.nationality ?? entry.country ?? "JP",
       status: entry.status,
+      avatarUrl,
       note: "Liquipedia MediaWiki API から自動取得",
     },
   });
@@ -1268,6 +1376,7 @@ function updatedCacheEntry(player: {
   role: string | null;
   staffCategory: StaffCategory | null;
   status: PlayerStatus;
+  avatarUrl: string | null;
 }) {
   return {
     id: player.id,
@@ -1278,6 +1387,7 @@ function updatedCacheEntry(player: {
     role: player.role,
     staffCategory: player.staffCategory,
     status: player.status,
+    avatarUrl: player.avatarUrl,
   };
 }
 
@@ -1450,6 +1560,7 @@ async function applyTeamRoster(
   cache: PlayerCache,
   stats: ApplyStats,
   logoUrl: string | null,
+  options: CliOptions,
 ) {
   const team = await ensureTeam(roster.team, gameId, regionId, logoUrl);
   const ordered = [...roster.entries].sort(
@@ -1458,7 +1569,22 @@ async function applyTeamRoster(
 
   for (const entry of ordered) {
     try {
-      const player = await ensurePlayer(entry, gameId, regionId, cache, stats);
+      const avatarUrl = entry.avatarSourceUrl
+        ? await downloadPlayerAvatar(
+            entry.handle,
+            entry.avatarSourceUrl,
+            options,
+            stats,
+          )
+        : null;
+      const player = await ensurePlayer(
+        entry,
+        gameId,
+        regionId,
+        cache,
+        stats,
+        avatarUrl,
+      );
       await upsertMembership(entry, player.id, team.id, stats);
       await upsertTransferEvents(entry, player.id, team, gameId);
     } catch (error) {
@@ -1634,11 +1760,7 @@ async function fetchFromFixture(
 
 function selectTeams(options: CliOptions) {
   const baseTeams =
-    options.region === "pacific"
-      ? [...VALO_PACIFIC_JP_TEAMS]
-      : options.region === "jp"
-        ? [...VALO_JP_TIER2_TEAMS]
-        : [...TARGET_TEAMS];
+    options.region === "valo" ? [...TARGET_TEAMS] : [...TARGET_TEAMS];
 
   if (!options.teamFilter) return baseTeams;
 
@@ -1682,27 +1804,6 @@ async function run() {
     );
   }
 
-  if (!options.dryRun) {
-    for (const regionCode of targetRegions) {
-      console.log(
-        `  🧹 ${regionCode} の TransferEvent / MembershipHistory / Player / Team を削除します...`,
-      );
-      const cleaned = await cleanupExistingRecords(regionCode);
-      console.log(
-        `  🧹 ${regionCode} 削除完了: transferEvents=${cleaned.transferEvents} / memberships=${cleaned.memberships} / players=${cleaned.players} / teams=${cleaned.teams}`,
-      );
-    }
-  }
-
-  const context = await ensureBaseData();
-
-  const regions = new Map<string, { id: string }>();
-  for (const regionCode of targetRegions) {
-    const region = await ensureRegion(regionCode, regionCode);
-    regions.set(regionCode, region);
-  }
-
-  const cache = await loadPlayerCache(context.game.id);
   const stats: ApplyStats = {
     teamsFetched: 0,
     teamsFailed: 0,
@@ -1716,13 +1817,52 @@ async function run() {
     warnings: [],
   };
 
+  // 24時間キャッシュ判定：スキップ対象チームを除外してクリーンアップ対象を絞る
+  const teamsToFetch: TargetTeamDefinition[] = [];
+  for (const team of teams) {
+    if (await shouldSkipTeamUpdate(team, options)) {
+      console.log(
+        `  ⏭️  ${team.name} は 24 時間以内に更新済みのためスキップします（--force で再取得）`,
+      );
+      stats.teamsFetched += 1;
+    } else {
+      teamsToFetch.push(team);
+    }
+  }
+
+  const fetchRegionCodes = Array.from(
+    new Set(teamsToFetch.map((team) => team.regionCode)),
+  );
+
+  if (!options.dryRun) {
+    for (const regionCode of fetchRegionCodes) {
+      console.log(
+        `  🧹 ${regionCode} の TransferEvent / MembershipHistory / Player / Team を削除します...`,
+      );
+      const cleaned = await cleanupExistingRecords(regionCode);
+      console.log(
+        `  🧹 ${regionCode} 削除完了: transferEvents=${cleaned.transferEvents} / memberships=${cleaned.memberships} / players=${cleaned.players} / teams=${cleaned.teams}`,
+      );
+    }
+  }
+
+  const context = await ensureBaseData();
+
+  const regions = new Map<string, { id: string }>();
+  for (const regionCode of fetchRegionCodes) {
+    const region = await ensureRegion(regionCode, regionCode);
+    regions.set(regionCode, region);
+  }
+
+  const cache = await loadPlayerCache(context.game.id);
+
   const updateLog = options.dryRun
     ? null
     : await prisma.updateLog.create({
         data: {
           source: "liquipedia:api",
           status: "RUNNING",
-          message: "MediaWiki API から対象4チームのロスターを取得中",
+          message: "MediaWiki API から VALORANT 日本チームのロスターを取得中",
         },
       });
 
@@ -1730,8 +1870,8 @@ async function run() {
   const rosters: TeamRoster[] = [];
 
   try {
-    for (const [index, team] of teams.entries()) {
-      const progress = `[${String(index + 1).padStart(2, "0")}/${String(teams.length).padStart(2, "0")}]`;
+    for (const [index, team] of teamsToFetch.entries()) {
+      const progress = `[${String(index + 1).padStart(2, "0")}/${String(teamsToFetch.length).padStart(2, "0")}]`;
       console.log(
         `\n${progress} Fetching ${team.liquipediaPage} (${team.name})...`,
       );
@@ -1779,6 +1919,7 @@ async function run() {
             cache,
             stats,
             logoUrl,
+            options,
           );
         }
       } catch (error) {
@@ -1790,6 +1931,14 @@ async function run() {
         console.error(`  ❌ ${team.name}: ${message}`);
 
         if (
+          error instanceof LiquipediaError &&
+          error.kind === "RATE_LIMIT"
+        ) {
+          console.error(
+            "   🚫 Rate limit (HTTP 429) を検知しました。しばらく時間を置いてから再実行してください。",
+          );
+          throw error;
+        } else if (
           error instanceof LiquipediaError &&
           error.kind === "BLOCKED"
         ) {
