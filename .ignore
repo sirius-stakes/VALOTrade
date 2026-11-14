@@ -1,0 +1,13 @@
+# すべてのファイル・フォルダを一旦除外する
+*
+
+# Teamtrade フォルダとその中身だけを許可する
+!Teamtrade/
+!Teamtrade/**
+
+# Teamtrade の中でも重くて不要なフォルダは除外する（トークン節約）
+Teamtrade/node_modules/
+Teamtrade/.next/
+Teamtrade/.git/
+Teamtrade/public/logos/
+Teamtrade/public/players/
