@@ -176,11 +176,11 @@ export const DASHBOARD_SECTIONS: readonly SectionDefinition[] = [
   },
   {
     key: "lft",
-    label: "LFT市場",
+    label: "LFT / FA 市場",
     title: "LFT / FA 選手一覧",
     hint: "Market",
     description:
-      "移籍先を探している選手の一覧。カードをクリックして経歴を確認できます。",
+      "LFT / FA / Inactive / Sub など、移籍市場に含まれる選手の横断一覧。カードをクリックして経歴を確認できます。",
     icon: UserRoundSearch,
   },
 ];

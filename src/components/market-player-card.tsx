@@ -49,6 +49,13 @@ export function MarketPlayerCard({
 
       <button
         type="button"
+        aria-label={`${player.handle} の詳細を開く`}
+        onClick={() => onSelect(player)}
+        className="absolute inset-0 z-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+      />
+
+      <button
+        type="button"
         aria-label={
           isFavorite ? "お気に入りから解除" : "お気に入りに追加"
         }
@@ -58,7 +65,7 @@ export function MarketPlayerCard({
           onToggleFavorite();
         }}
         className={cn(
-          "absolute right-3 top-3 z-10 rounded p-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30",
+          "pointer-events-auto absolute right-3 top-3 z-10 rounded p-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30",
           isFavorite
             ? "text-amber-300 hover:bg-amber-400/10"
             : "text-zinc-700 hover:bg-white/[0.06] hover:text-zinc-300",
@@ -69,11 +76,7 @@ export function MarketPlayerCard({
         />
       </button>
 
-      <button
-        type="button"
-        onClick={() => onSelect(player)}
-        className="flex w-full items-start gap-3 text-left focus-visible:outline-none"
-      >
+      <div className="relative z-10 flex w-full items-start gap-3 text-left pointer-events-none">
         <PlayerAvatar handle={player.handle} size="md" />
 
         <div className="min-w-0 flex-1">
@@ -91,16 +94,16 @@ export function MarketPlayerCard({
             {player.regionCode ? ` / ${player.regionCode}` : ""}
           </p>
         </div>
-      </button>
+      </div>
 
       {player.note ? (
-        <p className="line-clamp-2 text-[11px] leading-relaxed text-zinc-500">
+        <p className="relative z-10 line-clamp-2 text-[11px] leading-relaxed text-zinc-500 pointer-events-none">
           {player.note}
         </p>
       ) : null}
 
       {hasCurrentTeam || latest ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-2 py-1.5">
+        <div className="relative z-10 flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-2 py-1.5 pointer-events-none">
           <TeamLogo
             logoUrl={player.currentTeamLogoUrl ?? latest?.teamLogoUrl}
             shortName={player.currentTeamShortName ?? latest?.teamShortName}
@@ -121,17 +124,13 @@ export function MarketPlayerCard({
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-2 rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-2 py-1.5 text-[11px] text-zinc-500">
+        <div className="relative z-10 flex items-center gap-2 rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-2 py-1.5 text-[11px] text-zinc-500 pointer-events-none">
           <SearchX className="h-3 w-3" />
           無所属
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={() => onSelect(player)}
-        className="mt-auto flex w-full items-center justify-between rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-2.5 py-1.5 text-left transition-colors hover:border-zinc-700 hover:bg-zinc-900/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
-      >
+      <div className="relative z-10 mt-auto flex w-full items-center justify-between rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-2.5 py-1.5 pointer-events-none">
         <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-zinc-600">
           <UserRoundSearch className="h-3 w-3" />
           {player.status === "LFT"
@@ -147,7 +146,7 @@ export function MarketPlayerCard({
         <span className="text-[10px] text-zinc-500 transition-colors group-hover:text-zinc-300">
           プロフィール →
         </span>
-      </button>
+      </div>
     </div>
   );
 }

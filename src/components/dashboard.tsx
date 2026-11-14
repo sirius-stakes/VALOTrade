@@ -74,6 +74,17 @@ function playerMatchesQuery(player: PlayerDto, query: string) {
   );
 }
 
+function roleMatchesFilter(
+  role: string,
+  filter: Exclude<MarketRoleFilter, "all">,
+) {
+  const normalizedRole = role.toLowerCase();
+  const normalizedFilter = filter.toLowerCase();
+  if (normalizedRole === normalizedFilter) return true;
+  if (filter === "Coach" && normalizedRole.includes("coach")) return true;
+  return false;
+}
+
 export function Dashboard({ data }: DashboardProps) {
   const [gameSlug, setGameSlug] = useState(data.game.slug);
   const [section, setSection] = useState<DashboardSection>("roster");
@@ -288,7 +299,7 @@ export function Dashboard({ data }: DashboardProps) {
       }
       if (marketRoleFilter !== "all") {
         const role = player.currentRole?.trim() ?? "";
-        if (role.toLowerCase() !== marketRoleFilter.toLowerCase()) {
+        if (!roleMatchesFilter(role, marketRoleFilter)) {
           return false;
         }
       }
