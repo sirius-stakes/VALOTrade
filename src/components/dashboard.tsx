@@ -193,8 +193,8 @@ export function Dashboard({ data }: DashboardProps) {
                 プロチーム移籍・ロスター追跡
               </h1>
               <p className="mt-1.5 max-w-2xl text-[11px] leading-relaxed text-zinc-500 sm:text-xs">
-                ZETA DIVISION / DetonatioN FocusMe / FENNEL / QTnet
-                DISCONNECT の4チームに限定し、ロスター、LFT / FA
+                ZETA DIVISION / DetonatioN FocusMe / FENNEL / MURASH
+                GAMING の4チームに限定し、ロスター、LFT / FA
                 選手、移籍・契約の履歴をひとつのダッシュボードで追跡。データは外部クラウドに送信されません。
               </p>
             </div>

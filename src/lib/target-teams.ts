@@ -9,6 +9,8 @@ export type TargetTeamDefinition = {
   aliases: readonly string[];
   liquipediaPage: string;
   accent: string;
+  /** public/logos 配下に保存するロゴ画像のファイル名（拡張子なし） */
+  logoSlug: string;
 };
 
 export const TARGET_TEAMS: readonly TargetTeamDefinition[] = [
@@ -18,6 +20,7 @@ export const TARGET_TEAMS: readonly TargetTeamDefinition[] = [
     aliases: ["ZETA", "ZETA DIVISION"],
     liquipediaPage: "ZETA_DIVISION",
     accent: "violet",
+    logoSlug: "zeta",
   },
   {
     name: "DetonatioN FocusMe",
@@ -25,6 +28,7 @@ export const TARGET_TEAMS: readonly TargetTeamDefinition[] = [
     aliases: ["DFM", "DetonatioN FocusMe"],
     liquipediaPage: "DetonatioN_FocusMe",
     accent: "red",
+    logoSlug: "dfm",
   },
   {
     name: "FENNEL",
@@ -32,13 +36,15 @@ export const TARGET_TEAMS: readonly TargetTeamDefinition[] = [
     aliases: ["FL", "FENNEL"],
     liquipediaPage: "FENNEL",
     accent: "orange",
+    logoSlug: "fennel",
   },
   {
-    name: "QTnet DISCONNECT",
-    shortName: "QTD",
-    aliases: ["QTD", "QTnet DISCONNECT"],
-    liquipediaPage: "QTnet_DISCONNECT",
+    name: "MURASH GAMING",
+    shortName: "MURASH",
+    aliases: ["MURASH", "MURASH GAMING"],
+    liquipediaPage: "MURASH_GAMING",
     accent: "emerald",
+    logoSlug: "murash",
   },
 ];
 

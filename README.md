@@ -6,7 +6,7 @@
 - データはローカルの **SQLite**（`prisma/dev.db`）に保存します。
 - `http://localhost:3000` で動作するスタンドアロン型 Web アプリです。
 - データ収集は **Liquipedia（VALORANT）** をローカル CLI（`npm run update`）から取得し、SQLite に Upsert します。
-- 対象チームは **ZETA DIVISION / DetonatioN FocusMe / FENNEL / QTnet DISCONNECT** の 4 チームのみです。旧チーム・新チームのいずれかがこの 4 チームに一致する移籍だけを保存します。
+- 対象チームは **ZETA DIVISION / DetonatioN FocusMe / FENNEL / MURASH GAMING** の 4 チームのみです。旧チーム・新チームのいずれかがこの 4 チームに一致する移籍だけを保存します。
 
 ## 技術スタック
 
@@ -139,8 +139,8 @@ npm run update -- --dry-run --verbose
 npm run update:fixture
 ```
 
-> 取得対象は **ZETA DIVISION / DetonatioN FocusMe / FENNEL / QTnet DISCONNECT** の 4 チームのみです。
-> `page=ZETA_DIVISION` / `page=DetonatioN_FocusMe` / `page=FENNEL` / `page=QTnet_DISCONNECT` を
+> 取得対象は **ZETA DIVISION / DetonatioN FocusMe / FENNEL / MURASH GAMING** の 4 チームのみです。
+> `page=ZETA_DIVISION` / `page=DetonatioN_FocusMe` / `page=FENNEL` / `page=MURASH_GAMING` を
 > 1 ページずつ取得します。ページが存在しない場合は警告を出して残りのチームを継続します。
 
 ### Liquipedia 規約遵守
@@ -172,6 +172,8 @@ API リクエストには以下を必ず実装しています。
 
 ### 更新結果
 
+- 実行時は最初に既存の `MembershipHistory` → `Player` → `Team` をすべて削除し、4 チーム分を新規登録します（`--dry-run` 時は削除しません）。
+- チームページのインフォボックスからロゴ画像を取得し、`public/logos/{zeta,dfm,fennel,murash}.png` に保存します。DB の `Team.logoUrl` には `/logos/{slug}.png` を保存します。
 - 選手・スタッフは `Player` に保存され、ロール（Player / Head Coach など）と在籍期間は `MembershipHistory` に保存されます。
 - 現役ロスターは `isCurrent=true`、Inactive / Former は退団・休止年月を `endDate` に入れて `isCurrent=false` にします。
 - 実行結果は `UpdateLog` に保存され、ヘッダーの `Last synced` に反映されます。
@@ -202,7 +204,7 @@ Game 1 ── * Team * ── 1 Region
 
 `npm run db:seed` で以下を投入します（すべてデモ用のフィクションデータです）。
 
-- 4 チーム: ZETA DIVISION / DetonatioN FocusMe / FENNEL / QTnet DISCONNECT
+- 4 チーム: ZETA DIVISION / DetonatioN FocusMe / FENNEL / MURASH GAMING
 - 各チーム 6 名（選手 + コーチ、一部 Sub）: 合計 24 名
 - 上記4チームの元所属である LFT 3 名 / FA 2 名 / 休止（Inactive）1 名
 - 対象4チーム内の過去所属・移籍履歴と公式発表 URL

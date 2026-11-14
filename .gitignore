@@ -17,6 +17,9 @@ next-env.d.ts
 /prisma/dev.db-wal
 /prisma/dev.db-shm
 
+# Liquipedia からローカル保存するチームロゴ（自動生成物）
+/public/logos/
+
 # misc
 .DS_Store
 *.pem

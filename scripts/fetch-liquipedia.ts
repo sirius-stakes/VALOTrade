@@ -30,8 +30,10 @@ process.env.DATABASE_URL ??= "file:./dev.db";
 
 const prisma = new PrismaClient();
 
-const API_URL = "https://liquipedia.net/valorant/api.php";
-const PAGE_BASE_URL = "https://liquipedia.net/valorant";
+const BASE_URL = "https://liquipedia.net";
+const API_URL = `${BASE_URL}/valorant/api.php`;
+const PAGE_BASE_URL = `${BASE_URL}/valorant`;
+const LOGO_DIR = path.join(process.cwd(), "public", "logos");
 const DEFAULT_USER_AGENT =
   "ValorantRosterApp/1.0 (local-personal-tool; contact@example.com)";
 const USER_AGENT =
@@ -82,6 +84,8 @@ type TeamRoster = {
   pageUrl: string;
   entries: RosterEntry[];
   warnings: string[];
+  /** インフォボックスから抽出したロゴ画像の絶対 URL。未検出なら null。 */
+  logoSourceUrl: string | null;
 };
 
 type TableKind =
@@ -707,6 +711,35 @@ export function parseTeamRosterHtml(
   };
 }
 
+/**
+ * チームページのインフォボックスからロゴ画像の URL を抽出する。
+ * ダークテーマ用ロゴを優先し、無ければライトテーマ / 汎用画像にフォールバックする。
+ */
+export function extractTeamLogoUrl(html: string): string | null {
+  const $ = load(html);
+  const selectors = [
+    ".infobox-image.darkmode img",
+    ".infobox-image img",
+    ".fo-nttax-infobox .infobox-image img",
+    ".fo-nttax-infobox img",
+    ".infobox img",
+  ];
+
+  for (const selector of selectors) {
+    const image = $(selector).first();
+    if (image.length === 0) continue;
+
+    const src = clean(image.attr("src") ?? image.attr("data-src"));
+    if (!src) continue;
+    if (/^https?:\/\//i.test(src)) return src;
+    if (src.startsWith("//")) return `https:${src}`;
+    if (src.startsWith("/")) return `${BASE_URL}${src}`;
+    return new URL(src, BASE_URL).toString();
+  }
+
+  return null;
+}
+
 class LiquipediaError extends Error {
   constructor(
     message: string,
@@ -879,6 +912,69 @@ async function saveDebugBody(
   return fileName;
 }
 
+/**
+ * Liquipedia のロゴ画像を public/logos/{logoSlug}.png に保存する。
+ * 外部 URL への直リンクによるホットリンク制限を避けるため、必ずローカル保存する。
+ */
+async function downloadTeamLogo(
+  team: TargetTeamDefinition,
+  sourceUrl: string,
+  options: CliOptions,
+  stats: ApplyStats,
+): Promise<string | null> {
+  try {
+    await mkdir(LOGO_DIR, { recursive: true });
+    await waitForRateLimit(options, `${team.name} のロゴ画像`);
+
+    const response = await fetch(sourceUrl, {
+      redirect: "follow",
+      signal: AbortSignal.timeout(options.timeoutMs),
+      headers: {
+        "User-Agent": USER_AGENT,
+        "Accept-Encoding": "gzip",
+        Accept: "image/*",
+      },
+    });
+    lastRequestAt = Date.now();
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} ${response.statusText}`);
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length === 0) {
+      throw new Error("画像データが空でした");
+    }
+
+    const fileName = `${team.logoSlug}.png`;
+    await writeFile(path.join(LOGO_DIR, fileName), buffer);
+    const localPath = `/logos/${fileName}`;
+    console.log(`  🖼️  ロゴを保存しました: ${localPath} (${sourceUrl})`);
+    return localPath;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    stats.warnings.push(`${team.name}: ロゴ取得に失敗 (${message})`);
+    console.warn(`  ⚠️  ロゴ取得に失敗: ${team.name} (${message})`);
+    return null;
+  }
+}
+
+/**
+ * 取得前のクリーンアップ。
+ * 外部キー制約に違反しないよう MembershipHistory → Player → Team の順で削除する。
+ */
+async function cleanupExistingRecords() {
+  const memberships = await prisma.membershipHistory.deleteMany();
+  const players = await prisma.player.deleteMany();
+  const teams = await prisma.team.deleteMany();
+
+  return {
+    memberships: memberships.count,
+    players: players.count,
+    teams: teams.count,
+  };
+}
+
 async function ensureBaseData() {
   const game = await prisma.game.upsert({
     where: { slug: "valorant" },
@@ -904,6 +1000,7 @@ async function ensureBaseData() {
 async function ensureTeam(
   team: TargetTeamDefinition,
   context: Awaited<ReturnType<typeof ensureBaseData>>,
+  logoUrl: string | null = null,
 ) {
   const existing = await prisma.team.findFirst({
     where: {
@@ -912,7 +1009,15 @@ async function ensureTeam(
     },
   });
 
-  if (existing) return existing;
+  if (existing) {
+    if (logoUrl && existing.logoUrl !== logoUrl) {
+      return prisma.team.update({
+        where: { id: existing.id },
+        data: { logoUrl },
+      });
+    }
+    return existing;
+  }
 
   return prisma.team.create({
     data: {
@@ -921,6 +1026,7 @@ async function ensureTeam(
       name: team.name,
       shortName: team.shortName,
       accent: team.accent,
+      logoUrl,
       description: "Liquipedia MediaWiki API から自動登録された対象チーム",
       isActive: true,
     },
@@ -1153,8 +1259,9 @@ async function applyTeamRoster(
   context: Awaited<ReturnType<typeof ensureBaseData>>,
   cache: PlayerCache,
   stats: ApplyStats,
+  logoUrl: string | null,
 ) {
-  const team = await ensureTeam(roster.team, context);
+  const team = await ensureTeam(roster.team, context, logoUrl);
   const ordered = [...roster.entries].sort(
     (a, b) => Number(b.isCurrent) - Number(a.isCurrent),
   );
@@ -1285,6 +1392,7 @@ async function fetchTeam(
     pageUrl,
     entries: parsed.entries,
     warnings: parsed.warnings,
+    logoSourceUrl: extractTeamLogoUrl(html),
   };
 }
 
@@ -1329,6 +1437,7 @@ async function fetchFromFixture(
     pageUrl,
     entries: parsed.entries,
     warnings: parsed.warnings,
+    logoSourceUrl: extractTeamLogoUrl(html),
   };
 }
 
@@ -1368,6 +1477,16 @@ async function run() {
   if (teams.length === 0) {
     throw new Error(
       `対象チームが見つかりません: ${options.teamFilter ?? "(未指定)"}`,
+    );
+  }
+
+  if (!options.dryRun) {
+    console.log(
+      "  🧹 既存の MembershipHistory / Player / Team を削除します...",
+    );
+    const cleaned = await cleanupExistingRecords();
+    console.log(
+      `  🧹 削除完了: memberships=${cleaned.memberships} / players=${cleaned.players} / teams=${cleaned.teams}`,
     );
   }
 
@@ -1417,7 +1536,22 @@ async function run() {
         printTeamResult(roster);
 
         if (!options.dryRun) {
-          await applyTeamRoster(roster, context, cache, stats);
+          const logoUrl = roster.logoSourceUrl
+            ? await downloadTeamLogo(
+                roster.team,
+                roster.logoSourceUrl,
+                options,
+                stats,
+              )
+            : null;
+
+          if (!roster.logoSourceUrl) {
+            stats.warnings.push(
+              `${team.name}: インフォボックスのロゴ画像が見つかりませんでした`,
+            );
+          }
+
+          await applyTeamRoster(roster, context, cache, stats, logoUrl);
         }
       } catch (error) {
         stats.teamsFailed += 1;

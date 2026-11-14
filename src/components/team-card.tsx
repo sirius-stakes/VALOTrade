@@ -42,7 +42,7 @@ export function TeamCard({ team, onSelectPlayer }: TeamCardProps) {
           logoUrl={team.logoUrl}
           shortName={team.shortName}
           accent={team.accent}
-          size="lg"
+          size="card"
         />
         <div className="min-w-0 flex-1 pt-0.5">
           <div className="flex items-start gap-2">

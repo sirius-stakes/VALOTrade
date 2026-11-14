@@ -45,7 +45,7 @@ type SeedFreeAgent = SeedPlayer & {
 };
 
 /**
- * 取得・表示対象は ZETA / DFM / FENNEL / QTnet DISCONNECT の 4 チームのみ。
+ * 取得・表示対象は ZETA / DFM / FENNEL / MURASH GAMING の 4 チームのみ。
  * 初期データ内の所属履歴・移籍も、この 4 チームの範囲内だけで構成する。
  */
 const teams: SeedTeam[] = [
@@ -54,7 +54,7 @@ const teams: SeedTeam[] = [
     name: "ZETA DIVISION",
     regionCode: "JP",
     accent: "violet",
-    logoUrl: "/logos/zeta.svg",
+    logoUrl: "/logos/zeta.png",
     officialUrl: "https://zetadivision.com/",
     newsUrl: "https://zetadivision.com/news",
     description:
@@ -109,7 +109,7 @@ const teams: SeedTeam[] = [
         note: "サイトホールドとリテイク判断を支えるセンチネル。",
         history: [
           {
-            team: "QTD",
+            team: "MURASH",
             role: "Sentinel",
             startDate: "2023-06",
             endDate: "2025-01",
@@ -139,7 +139,7 @@ const teams: SeedTeam[] = [
     name: "DetonatioN FocusMe",
     regionCode: "JP",
     accent: "red",
-    logoUrl: "/logos/dfm.svg",
+    logoUrl: "/logos/dfm.png",
     officialUrl: "https://www.detonation.co.jp/",
     newsUrl: "https://www.detonation.co.jp/news",
     description:
@@ -208,7 +208,7 @@ const teams: SeedTeam[] = [
     name: "FENNEL",
     regionCode: "JP",
     accent: "orange",
-    logoUrl: null,
+    logoUrl: "/logos/fennel.png",
     officialUrl: "https://fennel.gg/",
     newsUrl: "https://fennel.gg/news",
     description:
@@ -273,15 +273,15 @@ const teams: SeedTeam[] = [
     ],
   },
   {
-    shortName: "QTD",
-    name: "QTnet DISCONNECT",
+    shortName: "MURASH",
+    name: "MURASH GAMING",
     regionCode: "JP",
     accent: "emerald",
-    logoUrl: null,
-    officialUrl: "https://qtdig.com/",
-    newsUrl: "https://qtdig.com/news",
+    logoUrl: "/logos/murash.png",
+    officialUrl: "https://murashgaming.jp/",
+    newsUrl: "https://murashgaming.jp/",
     description:
-      "QTnet が運営する国内チーム。若手中心のロスターで上位進出を狙う。",
+      "MURASH GAMING は日本を拠点に活動するVALORANTチーム。若手中心のロスターで上位進出を狙う。",
     roster: [
       {
         handle: "Kohaku",
@@ -401,11 +401,11 @@ const freeAgents: SeedFreeAgent[] = [
         announcementUrl: "https://www.detonation.co.jp/news",
       },
       {
-        team: "QTD",
+        team: "MURASH",
         role: "Flex",
         startDate: "2021-09",
         endDate: "2023-01",
-        announcementUrl: "https://qtdig.com/news",
+        announcementUrl: "https://murashgaming.jp/",
       },
     ],
   },
@@ -447,11 +447,11 @@ const freeAgents: SeedFreeAgent[] = [
         announcementUrl: "https://fennel.gg/news",
       },
       {
-        team: "QTD",
+        team: "MURASH",
         role: "Initiator",
         startDate: "2021-02",
         endDate: "2022-05",
-        announcementUrl: "https://qtdig.com/news",
+        announcementUrl: "https://murashgaming.jp/",
       },
     ],
   },
@@ -463,11 +463,11 @@ const freeAgents: SeedFreeAgent[] = [
     note: "2025年6月に現役引退。現在はストリーマーとして活動。",
     history: [
       {
-        team: "QTD",
+        team: "MURASH",
         role: "Controller",
         startDate: "2022-01",
         endDate: "2025-06",
-        announcementUrl: "https://qtdig.com/news",
+        announcementUrl: "https://murashgaming.jp/",
       },
     ],
   },
