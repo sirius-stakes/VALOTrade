@@ -58,6 +58,10 @@ export type TeamDto = {
   importPlayers: PlayerDto[];
   players: PlayerDto[];
   staff: PlayerDto[];
+  /** 過去大会実績（Phase 4-4 でデータ接続予定） */
+  achievements: TeamAchievementDto[];
+  /** 直近試合結果・次戦予定（Phase 4-4 でデータ接続予定） */
+  matches: TeamMatchDto[];
 };
 
 export type GameDto = {
@@ -80,6 +84,29 @@ export type TransferEventDto = {
   toTeamName: string | null;
   sourceUrl: string | null;
   sourceTitle: string | null;
+};
+
+/** チームの過去大会実績（Phase 2-3 では UI 枠組み、Phase 4-4 でデータ接続予定） */
+export type TeamAchievementDto = {
+  id: string;
+  tier: string;
+  tournament: string;
+  placement: string;
+  prize?: string | null;
+  date: string;
+};
+
+/** チームの直近・次戦試合（Phase 2-3 では UI 枠組み、Phase 4-4 でデータ接続予定） */
+export type TeamMatchDto = {
+  id: string;
+  opponentTeamName: string;
+  opponentTeamShortName: string | null;
+  opponentTeamLogoUrl: string | null;
+  isWin: boolean | null;
+  score: string | null;
+  date: string;
+  streamUrl: string | null;
+  status: "UPCOMING" | "RECENT";
 };
 
 export type DashboardData = {

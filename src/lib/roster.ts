@@ -243,6 +243,8 @@ export async function getDashboardData(): Promise<DashboardData | null> {
       importPlayers,
       players,
       staff,
+      achievements: [],
+      matches: [],
     };
   });
 

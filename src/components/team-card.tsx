@@ -24,6 +24,7 @@ type TeamCardProps = {
   showStaff: boolean;
   isFavorite: boolean;
   onToggleFavorite: () => void;
+  onSelectTeam?: () => void;
   onSelectPlayer: (player: PlayerDto) => void;
 };
 
@@ -32,6 +33,7 @@ export function TeamCard({
   showStaff,
   isFavorite,
   onToggleFavorite,
+  onSelectTeam,
   onSelectPlayer,
 }: TeamCardProps) {
   const accent = getTeamAccent(team.accent);
@@ -64,17 +66,42 @@ export function TeamCard({
       />
 
       <header className="relative flex items-start gap-3 px-4 pb-3 pt-4">
-        <TeamLogo
-          logoUrl={team.logoUrl}
-          shortName={team.shortName}
-          accent={team.accent}
-          size="card"
-        />
+        <button
+          type="button"
+          onClick={onSelectTeam}
+          disabled={!onSelectTeam}
+          aria-label={onSelectTeam ? `${team.name} の詳細を開く` : undefined}
+          className={cn(
+            "shrink-0 transition-opacity",
+            onSelectTeam
+              ? "cursor-pointer hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+              : "cursor-default",
+          )}
+        >
+          <TeamLogo
+            logoUrl={team.logoUrl}
+            shortName={team.shortName}
+            accent={team.accent}
+            size="card"
+          />
+        </button>
         <div className="min-w-0 flex-1 pt-0.5">
           <div className="flex items-start gap-2">
-            <h2 className="min-w-0 flex-1 truncate font-display text-[17px] font-bold tracking-wide text-zinc-50">
-              {team.name}
-            </h2>
+            <button
+              type="button"
+              onClick={onSelectTeam}
+              disabled={!onSelectTeam}
+              className={cn(
+                "min-w-0 flex-1 text-left",
+                onSelectTeam
+                  ? "cursor-pointer transition-colors hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+                  : "cursor-default",
+              )}
+            >
+              <h2 className="truncate font-display text-[17px] font-bold tracking-wide text-zinc-50">
+                {team.name}
+              </h2>
+            </button>
             <button
               type="button"
               aria-pressed={isFavorite}

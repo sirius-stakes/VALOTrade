@@ -19,6 +19,7 @@ import { PlayerModal } from "@/components/player-modal";
 import { SectionNav } from "@/components/section-nav";
 import { SectionPlaceholder } from "@/components/section-placeholder";
 import { TeamCard } from "@/components/team-card";
+import { TeamModal } from "@/components/team-modal";
 import { TransferTimeline } from "@/components/transfer-timeline";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,7 +28,7 @@ import {
   type DashboardSection,
 } from "@/lib/games";
 import type { StatusFilter } from "@/lib/status";
-import type { DashboardData, PlayerDto } from "@/lib/types";
+import type { DashboardData, PlayerDto, TeamDto } from "@/lib/types";
 import { useFavorites } from "@/lib/use-favorites";
 import { cn } from "@/lib/utils";
 
@@ -72,6 +73,7 @@ export function Dashboard({ data }: DashboardProps) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [showStaff, setShowStaff] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerDto | null>(null);
+  const [selectedTeam, setSelectedTeam] = useState<TeamDto | null>(null);
   const { isFavorite, toggleFavorite } = useFavorites();
 
   const game = getGameDefinition(gameSlug);
@@ -89,6 +91,7 @@ export function Dashboard({ data }: DashboardProps) {
     setStatusFilter("all");
     setQuery("");
     setSelectedPlayer(null);
+    setSelectedTeam(null);
   };
 
   const handleSectionChange = (next: DashboardSection) => {
@@ -96,12 +99,14 @@ export function Dashboard({ data }: DashboardProps) {
     setStatusFilter("all");
     setQuery("");
     setSelectedPlayer(null);
+    setSelectedTeam(null);
   };
 
   const resetFilters = () => {
     setQuery("");
     setStatusFilter("all");
     setSection("roster");
+    setSelectedTeam(null);
   };
 
   const filteredTeams = useMemo(() => {
@@ -405,6 +410,7 @@ export function Dashboard({ data }: DashboardProps) {
                   onToggleFavorite={() =>
                     toggleFavorite(data.game.slug, team.shortName)
                   }
+                  onSelectTeam={() => setSelectedTeam(team)}
                   onSelectPlayer={setSelectedPlayer}
                 />
               ))}
@@ -455,6 +461,18 @@ export function Dashboard({ data }: DashboardProps) {
         open={Boolean(selectedPlayer)}
         onOpenChange={(open) => {
           if (!open) setSelectedPlayer(null);
+        }}
+      />
+
+      <TeamModal
+        team={selectedTeam}
+        open={Boolean(selectedTeam)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedTeam(null);
+        }}
+        onSelectPlayer={(player) => {
+          setSelectedTeam(null);
+          setSelectedPlayer(player);
         }}
       />
     </div>
