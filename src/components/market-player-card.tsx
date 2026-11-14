@@ -77,7 +77,7 @@ export function MarketPlayerCard({
       </button>
 
       <div className="relative z-10 flex w-full items-start gap-3 text-left pointer-events-none">
-        <PlayerAvatar handle={player.handle} size="md" />
+        <PlayerAvatar handle={player.handle} avatarUrl={player.avatarUrl} size="md" />
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2 pr-8">
