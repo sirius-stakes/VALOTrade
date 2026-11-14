@@ -33,6 +33,7 @@ import {
   TARGET_TEAMS,
   type TargetTeamDefinition,
 } from "../src/lib/target-teams";
+import { fetchAndSaveStandingsForGame } from "./lib/standings-fetcher";
 
 process.env.DATABASE_URL ??= "file:./dev.db";
 
@@ -154,6 +155,7 @@ type ApplyStats = {
   membershipsClosed: number;
   achievementsCreated: number;
   matchesCreated: number;
+  standingsCreated: number;
   skipped: number;
   warnings: string[];
 };
@@ -2198,6 +2200,7 @@ async function run() {
     membershipsClosed: 0,
     achievementsCreated: 0,
     matchesCreated: 0,
+    standingsCreated: 0,
     skipped: 0,
     warnings: [],
   };
@@ -2341,6 +2344,33 @@ async function run() {
       }
     }
 
+    // 公式順位表の取得・保存（Phase 6-1）
+    try {
+      await waitForRateLimit(options, "VCT/VCJ 順位表");
+      const standingStats = await fetchAndSaveStandingsForGame(
+        prisma,
+        BASE_URL,
+        API_URL,
+        "valorant",
+        {
+          dryRun: options.dryRun,
+          verbose: options.verbose,
+          force: options.force,
+          debug: options.debug,
+          delayMs: options.delayMs,
+          timeoutMs: options.timeoutMs,
+        },
+      );
+      stats.standingsCreated += standingStats.entriesSaved;
+      if (standingStats.warnings.length > 0) {
+        stats.warnings.push(...standingStats.warnings);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      stats.warnings.push(`順位表取得: ${message}`);
+      console.error(`  ❌ 順位表取得: ${message}`);
+    }
+
     if (!options.dryRun && rosters.length > 0) {
       await finalizePlayerStatuses(rosters, cache, stats);
     }
@@ -2373,6 +2403,7 @@ async function run() {
     `memberships+${stats.membershipsCreated}~${stats.membershipsUpdated}/-${stats.membershipsClosed}`,
     `achievements+${stats.achievementsCreated}`,
     `matches+${stats.matchesCreated}`,
+    `standings+${stats.standingsCreated}`,
     `skipped=${stats.skipped}`,
   ].join(" ");
 

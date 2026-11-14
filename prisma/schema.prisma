@@ -210,17 +210,23 @@ model TransferEvent {
 
 /// 公式リーグ順位表。勝敗とポイントを保持。
 model Standing {
-  id        String @id @default(cuid())
-  gameId    String
-  regionId  String?
-  teamId    String?
-  season    String?
-  split     String?
-  rank      Int
-  wins      Int     @default(0)
-  losses    Int     @default(0)
-  points    Int?
-  tiebreaker String?
+  id           String @id @default(cuid())
+  gameId       String
+  regionId     String?
+  teamId       String?
+  /// 順位表から抽出したチーム名。teamId 未紐付け時のフォールバック表示用。
+  teamName     String?
+  season       String?
+  split        String?
+  /// ステージ名（Spring / Summer / Stage 1 / Split 1 等）。split と同義用途。
+  stage        String?
+  rank         Int
+  wins         Int     @default(0)
+  losses       Int     @default(0)
+  points       Int?
+  /// 得失点差（LCK の game diff 等）。
+  differential Int?
+  tiebreaker   String?
 
   game   Game  @relation(fields: [gameId], references: [id], onDelete: Cascade)
   region Region? @relation(fields: [regionId], references: [id])
