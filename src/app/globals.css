@@ -1,0 +1,123 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 33% 3.5%;
+    --foreground: 214 20% 92%;
+    --card: 220 28% 5%;
+    --card-foreground: 214 20% 92%;
+    --popover: 220 28% 5%;
+    --popover-foreground: 214 20% 92%;
+    --primary: 0 84% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 217 20% 12%;
+    --secondary-foreground: 214 20% 92%;
+    --muted: 217 20% 12%;
+    --muted-foreground: 215 14% 52%;
+    --accent: 217 20% 14%;
+    --accent-foreground: 214 20% 92%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 217 20% 14%;
+    --input: 217 20% 14%;
+    --ring: 0 70% 55%;
+    --radius: 0.65rem;
+    --font-sans: "Segoe UI", "Hiragino Kaku Gothic ProN", "Yu Gothic",
+      "Meiryo", system-ui, -apple-system, sans-serif;
+    --font-display: "Bahnschrift", "DIN Alternate", "Roboto Condensed",
+      "Arial Narrow", "Segoe UI", "Yu Gothic", sans-serif;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
+    background-color: #070a0f;
+    background-image:
+      radial-gradient(
+        ellipse 75% 45% at 50% -12%,
+        rgba(239, 68, 68, 0.055),
+        transparent 62%
+      ),
+      radial-gradient(
+        ellipse 55% 35% at 100% 0%,
+        rgba(139, 92, 246, 0.045),
+        transparent 62%
+      ),
+      linear-gradient(180deg, #070a0f 0%, #080b10 48%, #06080c 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(148, 163, 184, 0.022) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 163, 184, 0.022) 1px, transparent 1px);
+    background-size: 64px 64px;
+    -webkit-mask-image: radial-gradient(
+      ellipse 85% 60% at 50% 0%,
+      black 20%,
+      transparent 78%
+    );
+    mask-image: radial-gradient(
+      ellipse 85% 60% at 50% 0%,
+      black 20%,
+      transparent 78%
+    );
+  }
+
+  ::selection {
+    background: rgba(248, 113, 113, 0.28);
+    color: #fff;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #080b11;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #1e293b;
+    border: 2px solid #080b11;
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #334155;
+  }
+}
+
+@layer utilities {
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}

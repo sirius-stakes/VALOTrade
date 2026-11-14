@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="QT DIG">
+  <defs>
+    <linearGradient id="qt-g" x1="10" y1="8" x2="54" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34d399"/>
+      <stop offset="1" stop-color="#14b8a6"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#0a0e14"/>
+  <rect x="2.5" y="2.5" width="59" height="59" rx="12" fill="url(#qt-g)" fill-opacity=".09" stroke="url(#qt-g)" stroke-opacity=".5"/>
+  <rect x="15" y="15" width="34" height="34" rx="7" fill="none" stroke="url(#qt-g)" stroke-width="1.6" stroke-opacity=".7"/>
+  <circle cx="32" cy="31" r="8" fill="none" stroke="#a7f3d0" stroke-width="2.6"/>
+  <path d="M37.5 37.5 43 43" stroke="#a7f3d0" stroke-width="2.6" stroke-linecap="round"/>
+  <text x="32" y="57" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="8.8" font-weight="900" letter-spacing="2.4" fill="#a7f3d0">QT</text>
+</svg>

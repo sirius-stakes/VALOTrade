@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="FAV gaming">
+  <defs>
+    <linearGradient id="fav-g" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f472b6"/>
+      <stop offset="1" stop-color="#a855f7"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#0a0e14"/>
+  <rect x="2.5" y="2.5" width="59" height="59" rx="12" fill="url(#fav-g)" fill-opacity=".11" stroke="url(#fav-g)" stroke-opacity=".5"/>
+  <path d="M32 10 50 21v22L32 54 14 43V21Z" fill="none" stroke="url(#fav-g)" stroke-width="1.6" stroke-opacity=".8"/>
+  <path d="M32 18 43 25v14L32 46 21 39V25Z" fill="url(#fav-g)" fill-opacity=".2"/>
+  <path d="M25 38V25h9M25 32h7" stroke="#fbcfe8" stroke-width="2.6" stroke-linecap="round"/>
+  <text x="32" y="58" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="7.4" font-weight="900" letter-spacing="1.4" fill="#fbcfe8">FAV</text>
+</svg>

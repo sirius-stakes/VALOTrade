@@ -1,0 +1,195 @@
+// ───────────────────────────────────────────────────────────────
+// VALO-ROSTER JP / 完全ローカル SQLite スキーマ
+// 複数タイトル (Game)・複数地域 (Region) に拡張できる階層構造。
+// ───────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// VALORANT / LoL / CS2 など。UI のタイトル切替タブと 1:1 で対応。
+model Game {
+  id        String  @id @default(cuid())
+  slug      String  @unique
+  name      String
+  shortName String?
+  /// ヘッダーのタブに表示するか
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  teams          Team[]
+  players        Player[]
+  transferEvents TransferEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// JP / KR / APAC など。Team と Player の両方に紐づけられる。
+model Region {
+  id        String @id @default(cuid())
+  code      String @unique
+  name      String
+  sortOrder Int    @default(0)
+
+  teams   Team[]
+  players Player[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Team {
+  id          String  @id @default(cuid())
+  gameId      String
+  regionId    String
+  name        String
+  shortName   String
+  logoUrl     String?
+  officialUrl String?
+  description String?
+  /// ロゴ未設定時のモノグラムに使う Tailwind グラデーション識別子
+  accent      String  @default("violet")
+  isActive    Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  game        Game                @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  region      Region              @relation(fields: [regionId], references: [id])
+  memberships MembershipHistory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([gameId, shortName])
+  @@index([gameId])
+  @@index([regionId])
+}
+
+/// プレイヤーの現在ステータス。
+/// ACTIVE: 稼働中 / SUB: サブ・リザーブ / LFT: 移籍先募集中
+/// FA: フリーエージェント / INACTIVE: 休止・引退
+enum PlayerStatus {
+  ACTIVE
+  SUB
+  LFT
+  FA
+  INACTIVE
+}
+
+model Player {
+  id          String       @id @default(cuid())
+  gameId      String
+  regionId    String?
+  handle      String
+  realName    String?
+  status      PlayerStatus @default(ACTIVE)
+  country     String?      @default("JP")
+  xUrl        String?
+  officialUrl String?
+  avatarUrl   String?
+  note        String?
+
+  game        Game                @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  region      Region?             @relation(fields: [regionId], references: [id])
+  memberships MembershipHistory[]
+  transfers   TransferEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([gameId, handle])
+  @@index([gameId])
+  @@index([status])
+}
+
+/// 移籍・契約の履歴。isCurrent=true かつ endDate=null が現所属。
+/// 日付は画面表示用に YYYY-MM 形式で保持する（SQLite での年月比較を単純化）。
+model MembershipHistory {
+  id              String  @id @default(cuid())
+  playerId        String
+  teamId          String
+  role            String
+  startDate       String
+  endDate         String?
+  isCurrent       Boolean @default(false)
+  /// 移籍・加入の公式発表 URL
+  announcementUrl String?
+  sourceNote      String?
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([playerId, teamId, startDate])
+  @@index([playerId])
+  @@index([teamId])
+  @@index([isCurrent])
+}
+
+enum UpdateStatus {
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+/// Liquipedia Portal:Transfers から取得した移籍イベント種別。
+enum TransferType {
+  JOIN
+  TRANSFER
+  LEAVE
+  LFT
+  FA
+  INACTIVE
+  RETIRE
+  OTHER
+}
+
+/// 移籍タイムライン用のイベント。MembershipHistory（在籍履歴）とは別に、
+/// LFT / FA / 脱退など「チームに所属しない状態の変化」も保持する。
+model TransferEvent {
+  id           String       @id @default(cuid())
+  gameId       String
+  playerId     String?
+  playerHandle String
+  fromTeamName String?
+  toTeamName   String?
+  role         String?
+  type         TransferType @default(OTHER)
+  /// YYYY-MM-DD（日付不明時は YYYY-MM）。文字列比較で新しい順に並べる。
+  eventDate    String
+  sourceUrl    String?
+  sourceTitle  String?
+  rawText      String?
+  /// 同じ移籍イベントを重複登録しないための安定キー。
+  dedupeKey    String       @unique
+
+  game   Game    @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  player Player? @relation(fields: [playerId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([gameId, eventDate])
+  @@index([playerId])
+  @@index([type])
+}
+
+/// `npm run update` の実行履歴。ヘッダーの最終更新日時に使用。
+model UpdateLog {
+  id         String       @id @default(cuid())
+  source     String
+  status     UpdateStatus @default(RUNNING)
+  message    String?
+  startedAt  DateTime     @default(now())
+  finishedAt DateTime?
+
+  @@index([startedAt])
+}

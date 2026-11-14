@@ -1,0 +1,54 @@
+{
+  "name": "valo-roster-jp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "完全ローカル完結型 VALORANT JP プロチーム移籍・ロスター追跡ダッシュボード",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "prisma db seed",
+    "db:reset": "prisma migrate reset --force",
+    "update": "tsx scripts/fetch-liquipedia.ts",
+    "update:liquipedia": "tsx scripts/fetch-liquipedia.ts",
+    "update:teams": "tsx scripts/fetch-liquipedia.ts --teams",
+    "update:dry": "tsx scripts/fetch-liquipedia.ts --dry-run --verbose",
+    "update:fixture": "tsx scripts/fetch-liquipedia.ts --fixture=scripts/fixtures/liquipedia-transfers.html --dry-run --verbose",
+    "postinstall": "prisma generate"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3",
+    "@radix-ui/react-dialog": "1.3.1",
+    "@radix-ui/react-slot": "1.5.0",
+    "cheerio": "^1.1.2",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "lucide-react": "0.577.0",
+    "next": "15.5.29",
+    "react": "19.1.10",
+    "react-dom": "19.1.10",
+    "tailwind-merge": "2.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "@types/react": "19.1.17",
+    "@types/react-dom": "19.1.11",
+    "autoprefixer": "10.4.22",
+    "postcss": "8.5.6",
+    "prisma": "6.19.3",
+    "tailwindcss": "3.4.19",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3"
+  },
+  "allowScripts": {
+    "@prisma/client@6.19.3": true,
+    "@prisma/engines@6.19.3": true,
+    "esbuild@0.28.2": true,
+    "prisma@6.19.3": true
+  }
+}

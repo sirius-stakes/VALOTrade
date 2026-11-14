@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>ZETA DIVISION | ROSTER (local fixture)</title>
+  </head>
+  <body>
+    <header>
+      <h1>ZETA DIVISION</h1>
+      <p>VALORANT Division / 2026 Season Roster</p>
+    </header>
+
+    <!--
+      実際のチームサイトには data-roster-player 属性が無い場合がほとんどです。
+      このファイルはローカル更新スクリプトのパーサー確認用フィクスチャです。
+      `npm run update -- --fixture=scripts/fixtures/roster-sample.html --source=zeta --dry-run`
+    -->
+    <ul>
+      <li
+        data-roster-player
+        data-player-handle="Aster"
+        data-player-real-name="佐藤 海翔"
+        data-player-role="Duelist"
+        data-player-status="ACTIVE"
+        data-player-start-date="2024-01"
+        data-player-note="チームのエースデュエリスト。"
+        data-announcement-url="https://zetadivision.com/news"
+      ></li>
+      <li
+        data-roster-player
+        data-player-handle="Nagi"
+        data-player-real-name="中村 凪"
+        data-player-role="Initiator"
+        data-player-status="ACTIVE"
+        data-player-start-date="2025-02"
+        data-announcement-url="https://zetadivision.com/news"
+      ></li>
+      <li
+        data-roster-player
+        data-player-handle="Rin"
+        data-player-real-name="水野 凛"
+        data-player-role="Flex"
+        data-player-status="SUB"
+        data-player-start-date="2025-08"
+      ></li>
+      <li
+        data-roster-player
+        data-player-handle="Hibiki"
+        data-player-real-name="山本 響"
+        data-player-role="Coach"
+        data-player-status="ACTIVE"
+        data-player-start-date="2024-01"
+      ></li>
+    </ul>
+
+    <section>
+      <h2>NEWS</h2>
+      <a href="https://zetadivision.com/news" data-announcement data-player-handle="Aster">
+        Aster 選手 契約更新のお知らせ
+      </a>
+      <p>LFT / FA に関するお問い合わせは公式サイトまで。</p>
+    </section>
+  </body>
+</html>

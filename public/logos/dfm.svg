@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="DetonatioN FocusMe">
+  <defs>
+    <linearGradient id="dfm-g" x1="10" y1="6" x2="54" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f87171"/>
+      <stop offset="1" stop-color="#dc2626"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#0a0e14"/>
+  <rect x="2.5" y="2.5" width="59" height="59" rx="12" fill="url(#dfm-g)" fill-opacity=".1" stroke="url(#dfm-g)" stroke-opacity=".5"/>
+  <path d="M11 45 28 19h8L19 45Z" fill="url(#dfm-g)" fill-opacity=".85"/>
+  <path d="M26 45 43 19h10L36 45Z" fill="url(#dfm-g)" fill-opacity=".45"/>
+  <circle cx="47" cy="19" r="2.6" fill="#fca5a5"/>
+  <text x="30" y="57" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="8.2" font-weight="900" letter-spacing="1.6" fill="#fecaca">DFM</text>
+</svg>

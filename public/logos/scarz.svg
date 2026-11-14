@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SCARZ">
+  <defs>
+    <linearGradient id="scarz-g" x1="10" y1="6" x2="54" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#0a0e14"/>
+  <rect x="2.5" y="2.5" width="59" height="59" rx="12" fill="url(#scarz-g)" fill-opacity=".1" stroke="url(#scarz-g)" stroke-opacity=".5"/>
+  <path d="M14 18h36L39 30H25L14 18Z" fill="url(#scarz-g)" fill-opacity=".55"/>
+  <path d="M18 32h28L35 42H29L18 32Z" fill="url(#scarz-g)" fill-opacity=".35"/>
+  <path d="M24 44h16l-4 7H28l-4-7Z" fill="#67e8f9" fill-opacity=".8"/>
+  <text x="32" y="57" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="5.5" font-weight="900" letter-spacing="1.2" fill="#a5f3fc">SCARZ</text>
+</svg>
