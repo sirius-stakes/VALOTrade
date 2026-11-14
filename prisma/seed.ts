@@ -8,7 +8,7 @@ type SeedPlayer = {
   handle: string;
   realName?: string;
   status: PlayerStatus;
-  /** 選手（Duelist / IGL など）またはコーチ（Coach など）のみ。 */
+  /** 選手（Duelist / IGL など）、コーチ、マネージャー / アナリストなどのスタッフ。 */
   role: string;
   startDate: string;
   note?: string;
@@ -92,6 +92,22 @@ const teams: SeedTeam[] = [
         startDate: "2024-01",
         note: "ヘッドコーチ。国際大会での戦術設計を担当。",
       },
+      {
+        handle: "Kaz",
+        realName: "川崎 和也",
+        status: "ACTIVE",
+        role: "Manager",
+        startDate: "2024-02",
+        note: "チームマネージャー。契約・遠征・運営を担当。",
+      },
+      {
+        handle: "Sena",
+        realName: "瀬名 結衣",
+        status: "ACTIVE",
+        role: "Analyst",
+        startDate: "2025-01",
+        note: "データアナリスト。対戦相手の傾向分析を担当。",
+      },
     ],
   },
   {
@@ -152,6 +168,22 @@ const teams: SeedTeam[] = [
         role: "Coach",
         startDate: "2023-01",
         note: "育成とデータ分析に強みを持つコーチ。",
+      },
+      {
+        handle: "Haru",
+        realName: "林 陽菜",
+        status: "ACTIVE",
+        role: "Manager",
+        startDate: "2023-04",
+        note: "チームマネージャー。スケジュールと選手サポートを担当。",
+      },
+      {
+        handle: "Riku",
+        realName: "森 陸",
+        status: "ACTIVE",
+        role: "Analyst",
+        startDate: "2025-02",
+        note: "アナリスト。マップ別の戦術データを分析。",
       },
     ],
   },
@@ -214,6 +246,22 @@ const teams: SeedTeam[] = [
         startDate: "2024-08",
         note: "国際大会経験のあるコーチ。",
       },
+      {
+        handle: "Takumi",
+        realName: "匠 拓海",
+        status: "ACTIVE",
+        role: "Manager",
+        startDate: "2024-01",
+        note: "チームマネージャー。運営と広報を兼務。",
+      },
+      {
+        handle: "Emi",
+        realName: "江美 恵",
+        status: "ACTIVE",
+        role: "Analyst",
+        startDate: "2025-03",
+        note: "アナリスト。ピストルラウンドの統計を担当。",
+      },
     ],
   },
   {
@@ -275,6 +323,22 @@ const teams: SeedTeam[] = [
         startDate: "2024-08",
         note: "データ分析出身のコーチ。",
       },
+      {
+        handle: "Kai",
+        realName: "海斗 海",
+        status: "ACTIVE",
+        role: "Manager",
+        startDate: "2024-09",
+        note: "チームマネージャー。選手契約と現場運営を担当。",
+      },
+      {
+        handle: "Yuna",
+        realName: "優奈 結",
+        status: "ACTIVE",
+        role: "Analyst",
+        startDate: "2025-04",
+        note: "アナリスト。スクリムのデータ集計を担当。",
+      },
     ],
   },
 ];
@@ -334,7 +398,7 @@ async function main() {
     });
   }
 
-  console.log("👤 選手・コーチと現在の所属を作成中...");
+  console.log("👤 選手・コーチ・スタッフと現在の所属を作成中...");
 
   let playerCount = 0;
 
@@ -376,7 +440,7 @@ async function main() {
   }
 
   const finishedAt = new Date();
-  const summary = `${teams.length}チーム / ${playerCount}選手・コーチ / 移籍イベントなし`;
+  const summary = `${teams.length}チーム / ${playerCount}選手・コーチ・スタッフ / 移籍イベントなし`;
 
   await prisma.updateLog.create({
     data: {

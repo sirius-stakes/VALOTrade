@@ -3,6 +3,7 @@
 import { ArrowUpRight, Clock3, UserRoundSearch } from "lucide-react";
 
 import { PlayerAvatar } from "@/components/player-avatar";
+import { NationalityFlag } from "@/components/nationality-flag";
 import { RoleTag, StatusBadge } from "@/components/status-badge";
 import { TeamLogo } from "@/components/team-logo";
 import type { PlayerDto } from "@/lib/types";
@@ -39,6 +40,7 @@ export function FreeAgentCard({ player, onSelect }: FreeAgentCardProps) {
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
+          <NationalityFlag country={player.country} />
           <span className="font-display text-base font-bold tracking-wide text-zinc-100">
             {player.handle}
           </span>

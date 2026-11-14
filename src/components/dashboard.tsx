@@ -28,6 +28,7 @@ import {
 } from "@/lib/games";
 import type { StatusFilter } from "@/lib/status";
 import type { DashboardData, PlayerDto } from "@/lib/types";
+import { useFavorites } from "@/lib/use-favorites";
 import { cn } from "@/lib/utils";
 
 type DashboardProps = {
@@ -69,7 +70,9 @@ export function Dashboard({ data }: DashboardProps) {
   const [section, setSection] = useState<DashboardSection>("roster");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [showStaff, setShowStaff] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerDto | null>(null);
+  const { isFavorite, toggleFavorite } = useFavorites();
 
   const game = getGameDefinition(gameSlug);
   const hasGameData = game.hasLocalData && game.slug === data.game.slug;
@@ -129,10 +132,31 @@ export function Dashboard({ data }: DashboardProps) {
           );
         });
 
-        return { ...team, players };
+        const staff = showStaff
+          ? team.staff.filter(
+              (member) =>
+                normalizedQuery.length === 0 ||
+                teamMatches ||
+                playerMatchesQuery(member, normalizedQuery),
+            )
+          : [];
+
+        return { ...team, players, staff };
       })
-      .filter((team) => team.players.length > 0);
-  }, [data.teams, normalizedQuery, statusFilter]);
+      .filter((team) => team.players.length > 0 || team.staff.length > 0)
+      .sort((a, b) => {
+        const aFavorite = isFavorite(data.game.slug, a.shortName) ? 1 : 0;
+        const bFavorite = isFavorite(data.game.slug, b.shortName) ? 1 : 0;
+        return bFavorite - aFavorite;
+      });
+  }, [
+    data.teams,
+    data.game.slug,
+    normalizedQuery,
+    statusFilter,
+    showStaff,
+    isFavorite,
+  ]);
 
   const filteredFreeAgents = useMemo(() => {
     return data.freeAgents.filter(
@@ -178,7 +202,8 @@ export function Dashboard({ data }: DashboardProps) {
         : showsFreeAgentList
           ? filteredFreeAgents.length
           : filteredTeams.reduce(
-              (total, team) => total + team.players.length,
+              (total, team) =>
+                total + team.players.length + team.staff.length,
               0,
             );
 
@@ -187,7 +212,7 @@ export function Dashboard({ data }: DashboardProps) {
       ? data.transfers.length
       : showsFreeAgentList
         ? data.freeAgents.length
-        : data.stats.playerCount;
+        : data.stats.playerCount + (showStaff ? data.stats.staffCount : 0);
 
   const hasResults = visibleCount > 0;
 
@@ -221,6 +246,9 @@ export function Dashboard({ data }: DashboardProps) {
             statusFilter={statusFilter}
             onStatusFilterChange={setStatusFilter}
             showStatusFilter={section === "roster" || section === "transfers"}
+            showStaffToggle={section === "roster"}
+            showStaff={showStaff}
+            onShowStaffChange={setShowStaff}
             placeholder={
               section === "transfers"
                 ? "選手名・チーム名・出典で検索..."
@@ -372,6 +400,11 @@ export function Dashboard({ data }: DashboardProps) {
                 <TeamCard
                   key={team.id}
                   team={team}
+                  showStaff={showStaff}
+                  isFavorite={isFavorite(data.game.slug, team.shortName)}
+                  onToggleFavorite={() =>
+                    toggleFavorite(data.game.slug, team.shortName)
+                  }
                   onSelectPlayer={setSelectedPlayer}
                 />
               ))}

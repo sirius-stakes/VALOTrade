@@ -1,5 +1,7 @@
 import type { PlayerStatus, TransferType } from "@prisma/client";
 
+import type { RosterCategory } from "@/lib/roles";
+
 export type MembershipDto = {
   id: string;
   teamId: string;
@@ -21,6 +23,8 @@ export type PlayerDto = {
   handle: string;
   realName: string | null;
   status: PlayerStatus;
+  /** 選手 / コーチ / スタッフの区分（チームカード内の表示制御に使用） */
+  category: RosterCategory;
   country: string | null;
   regionCode: string | null;
   xUrl: string | null;
@@ -46,8 +50,14 @@ export type TeamDto = {
   officialUrl: string | null;
   description: string | null;
   accent: string;
+  /** 選手 + コーチの人数（スタッフを除く） */
   playerCount: number;
+  /** 日本国籍以外の現ロスター選手数 */
+  importCount: number;
+  /** Import バッジのツールチップに使う対象選手 */
+  importPlayers: PlayerDto[];
   players: PlayerDto[];
+  staff: PlayerDto[];
 };
 
 export type GameDto = {
@@ -85,5 +95,6 @@ export type DashboardData = {
     playerCount: number;
     activeCount: number;
     freeAgentCount: number;
+    staffCount: number;
   };
 };

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { PlayerAvatar } from "@/components/player-avatar";
+import { NationalityFlag } from "@/components/nationality-flag";
 import { RoleTag, StatusBadge } from "@/components/status-badge";
 import { TeamLogo } from "@/components/team-logo";
 import {
@@ -68,6 +69,10 @@ export function PlayerModal({ player, open, onOpenChange }: PlayerModalProps) {
               <PlayerAvatar handle={player.handle} size="lg" />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2.5">
+                  <NationalityFlag
+                    country={player.country}
+                    className="text-sm"
+                  />
                   <DialogTitle className="font-display text-3xl font-black tracking-wide text-white">
                     {player.handle}
                   </DialogTitle>

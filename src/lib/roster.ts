@@ -3,9 +3,12 @@ import type { PlayerStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { roleRank } from "@/lib/status";
 import {
+  getRosterCategory,
+  isCompetitiveRole,
   isRosterRole,
   rosterPriority,
 } from "@/lib/roles";
+import { isImportCountry } from "@/lib/nationality";
 import { isTargetTeamName } from "@/lib/target-teams";
 import type {
   DashboardData,
@@ -69,12 +72,14 @@ function mapPlayer(player: PlayerWithMemberships): PlayerDto {
     });
 
   const current = memberships.find((membership) => membership.isCurrent) ?? null;
+  const primaryRole = current?.role ?? memberships[0]?.role ?? null;
 
   return {
     id: player.id,
     handle: player.handle,
     realName: player.realName,
     status: player.status,
+    category: getRosterCategory(primaryRole),
     country: player.country,
     regionCode: player.region?.code ?? null,
     xUrl: player.xUrl,
@@ -92,7 +97,7 @@ function mapPlayer(player: PlayerWithMemberships): PlayerDto {
 }
 
 function comparePlayers(a: PlayerDto, b: PlayerDto) {
-  // コーチはステータスに関係なく一番下にまとめる。
+  // 選手 → コーチ → スタッフの順にまとめ、選手はステータス順に並べる。
   const priorityDiff =
     rosterPriority(a.currentRole, a.status) -
     rosterPriority(b.currentRole, b.status);
@@ -210,10 +215,18 @@ export async function getDashboardData(): Promise<DashboardData | null> {
       new Set(team.memberships.map((membership) => membership.playerId)),
     );
 
-    const players = playerIds
+    const members = playerIds
       .map((id) => playerMap.get(id))
       .filter((player): player is PlayerDto => Boolean(player))
       .sort(comparePlayers);
+
+    const players = members.filter((player) => player.category !== "STAFF");
+    const staff = members.filter((player) => player.category === "STAFF");
+
+    const importPlayers = players.filter(
+      (player) =>
+        player.category === "PLAYER" && isImportCountry(player.country),
+    );
 
     return {
       id: team.id,
@@ -226,14 +239,20 @@ export async function getDashboardData(): Promise<DashboardData | null> {
       description: team.description,
       accent: team.accent,
       playerCount: players.length,
+      importCount: importPlayers.length,
+      importPlayers,
       players,
+      staff,
     };
   });
 
   const players = Array.from(playerMap.values()).sort((a, b) =>
     a.handle.localeCompare(b.handle, "ja"),
   );
-  const freeAgents = players
+  const competitivePlayers = players.filter(
+    (player) => player.category !== "STAFF",
+  );
+  const freeAgents = competitivePlayers
     .filter((player) => player.status === "LFT" || player.status === "FA")
     .sort((a, b) => {
       if (a.status !== b.status) return a.status === "LFT" ? -1 : 1;
@@ -253,7 +272,7 @@ export async function getDashboardData(): Promise<DashboardData | null> {
         isTargetTeamName(event.fromTeamName) ||
         isTargetTeamName(event.toTeamName),
     )
-    .filter((event) => isRosterRole(event.role))
+    .filter((event) => isCompetitiveRole(event.role))
     .map((event) => ({
       id: event.id,
       playerId: event.playerId,
@@ -284,10 +303,12 @@ export async function getDashboardData(): Promise<DashboardData | null> {
     lastUpdateSource: lastLog?.source ?? null,
     stats: {
       teamCount: teams.length,
-      playerCount: players.length,
-      activeCount: players.filter((player) => player.status === "ACTIVE")
-        .length,
+      playerCount: competitivePlayers.length,
+      activeCount: competitivePlayers.filter(
+        (player) => player.status === "ACTIVE",
+      ).length,
       freeAgentCount: freeAgents.length,
+      staffCount: players.length - competitivePlayers.length,
     },
   };
 }

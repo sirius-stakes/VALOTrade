@@ -138,6 +138,8 @@ export const ROLE_ORDER = [
   "Flex",
   "Coach",
   "Analyst",
+  "Manager",
+  "Staff",
 ] as const;
 
 export function roleRank(role: string) {

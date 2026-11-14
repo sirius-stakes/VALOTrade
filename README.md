@@ -2,6 +2,7 @@
 
 日本の **VALORANT** プロシーンを対象にした、**完全ローカル完結型**のプロチーム移籍・ロスター追跡ダッシュボードです。
 Phase 2-1 で **VALORANT / League of Legends / Identity V** のタイトル切替と、タイトル別テーマアクセントを備えた 2 階層ナビゲーションへ刷新しました（LoL / Identity V のデータ取得は後続フェーズ）。
+Phase 2-2 では、スタッフ表示トグル、国籍フラグ / Import バッジ、`localStorage` によるチームのお気に入りピン留めを追加しています。
 
 - 外部クラウド（Vercel / Supabase / GitHub Actions など）、DB の無料枠、有料 API は一切使用しません。
 - データはローカルの **SQLite**（`prisma/dev.db`）に保存します。
@@ -70,7 +71,10 @@ npm run start
 - **コントロールバー**:
   - 選手名・チーム名・ロールのリアルタイムインクリメンタル検索。
   - ステータスフィルター（すべて / LFT・FAのみ / Activeのみ）。
+  - 「マネージャー・アナリストを表示」トグル。デフォルト OFF で、ON 時のみチームカードにスタッフ行を表示します。
 - **チーム別グリッド**: 最大 4 カラムのレスポンシブカード。`zinc-950` / `zinc-900` のチャコール基調と極細ボーダーで、チーム名・略称・リージョン（JP）・ロスター・ロール・ステータスバッジを表示。
+  - 選手の国籍を絵文字フラグで表示し、日本国籍以外の現ロスター選手数を `Import` バッジで表示します。
+  - カード右上の ★ でお気に入り登録。`localStorage`（`teamtrade.favorites.v1`）に保存され、お気に入りチームはグリッド最上部に固定表示されます。
 - **ステータスバッジ**:
   - `Active`（エメラルド）
   - `Sub / Reserve`（スレート）
@@ -110,6 +114,7 @@ src/
     section-placeholder.tsx # 準備中セクションの UI 枠組み
     control-bar.tsx
     team-card.tsx
+    nationality-flag.tsx # 国籍フラグ
     free-agent-card.tsx
     player-modal.tsx     # 移籍・所属タイムライン
     transfer-timeline.tsx
@@ -121,10 +126,13 @@ src/
   lib/
     prisma.ts
     games.ts             # タイトル別テーマ・サブナビゲーション定義
+    nationality.ts       # 国名 → ISO コード / 国旗 / Import 判定
+    roles.ts             # 選手 / コーチ / スタッフの役職判定
     roster.ts            # DB → 画面用 DTO 変換（対象4チームに限定）
     status.ts            # ステータス・ロール・チームアクセント定義
     target-teams.ts      # 対象4チーム・表記揺れ・正規化ルール
     types.ts
+    use-favorites.ts     # localStorage なお気に入りフック
     utils.ts
 ```
 
@@ -180,9 +188,9 @@ API リクエストには以下を必ず実装しています。
 
 - 実行時は最初に既存の `TransferEvent` → `MembershipHistory` → `Player` → `Team` をすべて削除し、4 チーム分を新規登録します（`--dry-run` 時は削除しません）。
 - チームページのインフォボックスからロゴ画像を取得し、`public/logos/{zeta,dfm,fennel,murash}.png` に保存します。DB の `Team.logoUrl` には `/logos/{slug}.png` を保存します。
-- 取得・表示対象は選手（Player / Duelist / IGL など）とコーチ（Coach / Head Coach / Assistant Coach など）のみです。Manager / Analyst / Streamer / CEO / Director などのスタッフは保存・表示しません。
-- 選手・コーチは `Player` に保存され、ロールと在籍期間は `MembershipHistory`、加入・退団は `TransferEvent` に保存されます。
-- チームカード内は Active 選手 → Sub / Reserve → LFT / FA / Inactive → Coach の順で表示します。
+- 取得・表示対象は選手（Player / Duelist / IGL など）・コーチ（Coach / Head Coach / Assistant Coach など）・スタッフ（Manager / Analyst / Streamer / CEO / Director など）です。スタッフは UI 側の「マネージャー・アナリストを表示」トグルが ON の場合のみチームカードに表示されます。
+- 選手・コーチ・スタッフは `Player` に保存され、ロールと在籍期間は `MembershipHistory`、加入・退団は `TransferEvent` に保存されます。
+- チームカード内は Active 選手 → Sub / Reserve → LFT / FA / Inactive → Coach → Staff の順で表示します。
 - 現役ロスターは `isCurrent=true`、Inactive / Former は退団・休止年月を `endDate` に入れて `isCurrent=false` にします。
 - 実行結果は `UpdateLog` に保存され、ヘッダーの `Last synced` に反映されます。
 - 取得に失敗した場合も `UpdateLog` に `FAILED` として記録されます。
