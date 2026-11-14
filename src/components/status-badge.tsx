@@ -58,6 +58,10 @@ const ROLE_COLORS: Record<string, string> = {
   Bot: "border-sky-400/25 bg-sky-400/[0.08] text-sky-300",
   ADC: "border-sky-400/25 bg-sky-400/[0.08] text-sky-300",
   Support: "border-violet-400/25 bg-violet-400/[0.08] text-violet-300",
+  Survivor:
+    "border-sky-400/30 bg-sky-400/[0.10] text-sky-300",
+  Hunter:
+    "border-rose-500/30 bg-rose-500/[0.10] text-rose-300",
   Coach:
     "border-zinc-500/30 bg-zinc-500/[0.08] text-zinc-300",
   Manager:

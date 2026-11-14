@@ -9,7 +9,7 @@ import type { PlayerStatus } from "@prisma/client";
 export type RosterCategory = "PLAYER" | "COACH" | "STAFF";
 
 const PLAYER_ROLE_PATTERN =
-  /player|duelist|initiator|controller|sentinel|flex|\bigl\b|stand-?in|substitute|reserve|bench|top|jungle|mid|bot|adc|support/i;
+  /player|duelist|initiator|controller|sentinel|flex|\bigl\b|stand-?in|substitute|reserve|bench|top|jungle|mid|bot|adc|support|survivor|hunter/i;
 
 const COACH_ROLE_PATTERN = /coach/i;
 

@@ -11,6 +11,7 @@ import {
 import { isImportCountry } from "@/lib/nationality";
 import { isTargetTeamName } from "@/lib/target-teams";
 import { isLolTargetTeamName } from "@/lib/lol-teams";
+import { isIdvTargetTeamName } from "@/lib/idv-teams";
 import type {
   DashboardData,
   MembershipDto,
@@ -120,7 +121,11 @@ function isTargetRelatedPlayer(
   gameSlug: string,
 ) {
   const isTarget =
-    gameSlug === "league-of-legends" ? isLolTargetTeamName : isTargetTeamName;
+    gameSlug === "league-of-legends"
+      ? isLolTargetTeamName
+      : gameSlug === "identity-v"
+        ? isIdvTargetTeamName
+        : isTargetTeamName;
   return player.memberships.some(
     (membership) =>
       isTarget(membership.team.name) || isTarget(membership.team.shortName),
@@ -219,7 +224,11 @@ export async function getDashboardData(
   }
 
   const isTarget =
-    gameSlug === "league-of-legends" ? isLolTargetTeamName : isTargetTeamName;
+    gameSlug === "league-of-legends"
+      ? isLolTargetTeamName
+      : gameSlug === "identity-v"
+        ? isIdvTargetTeamName
+        : isTargetTeamName;
 
   const targetTeams = game.teams.filter(
     (team) => isTarget(team.name) || isTarget(team.shortName),

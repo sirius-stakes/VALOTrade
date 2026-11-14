@@ -177,7 +177,9 @@ export function Dashboard({ dataMap, initialGameSlug }: DashboardProps) {
   const REGION_ORDER =
     gameSlug === "league-of-legends"
       ? ["LCK"]
-      : ["VCT Pacific (JP)", "JP Tier 2 (VCJ)"];
+      : gameSlug === "identity-v"
+        ? ["IJL"]
+        : ["VCT Pacific (JP)", "JP Tier 2 (VCJ)"];
 
   const availableRegions = useMemo(
     () =>

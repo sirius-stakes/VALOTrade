@@ -114,7 +114,7 @@ export const GAME_DEFINITIONS: readonly GameDefinition[] = [
       "Survivor / Hunter ロール",
       "Liquipedia Identity V API",
     ],
-    hasLocalData: false,
+    hasLocalData: true,
     icon: Ghost,
   },
 ];

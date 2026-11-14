@@ -23,6 +23,8 @@ export type MarketRoleFilter =
   | "Bot"
   | "ADC"
   | "Support"
+  | "Survivor"
+  | "Hunter"
   | "Coach";
 
 const STATUS_OPTIONS: Array<{
@@ -47,6 +49,12 @@ const ROLE_OPTIONS_BY_GAME: Record<
     { value: "Bot", label: "Bot" },
     { value: "ADC", label: "ADC" },
     { value: "Support", label: "Support" },
+    { value: "Coach", label: "Coach" },
+  ],
+  "identity-v": [
+    { value: "all", label: "All Roles" },
+    { value: "Survivor", label: "Survivor" },
+    { value: "Hunter", label: "Hunter" },
     { value: "Coach", label: "Coach" },
   ],
   default: [

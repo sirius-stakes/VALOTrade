@@ -13,6 +13,7 @@
     "db:reset": "prisma migrate reset --force",
     "update:valo": "tsx scripts/fetch-liquipedia.ts --region=valo",
     "update:lol": "tsx scripts/fetch-lol.ts",
+    "update:idv": "tsx scripts/fetch-idv.ts",
     "update:dry": "tsx scripts/fetch-liquipedia.ts --region=valo --dry-run --verbose",
     "update:fixture": "tsx scripts/fetch-liquipedia.ts --fixture=scripts/fixtures/liquipedia-roster.html --team=ZETA_DIVISION --dry-run --verbose",
     "postinstall": "prisma generate"

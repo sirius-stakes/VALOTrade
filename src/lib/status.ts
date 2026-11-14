@@ -142,6 +142,8 @@ export const ROLE_ORDER = [
   "Bot",
   "ADC",
   "Support",
+  "Survivor",
+  "Hunter",
   "Coach",
   "Analyst",
   "Manager",
@@ -206,6 +208,12 @@ export const TEAM_ACCENTS: Record<
     ring: "ring-emerald-400/30",
     text: "text-emerald-200",
     line: "bg-emerald-400",
+  },
+  purple: {
+    gradient: "from-purple-500/35 via-violet-500/20 to-transparent",
+    ring: "ring-purple-400/30",
+    text: "text-purple-200",
+    line: "bg-purple-400",
   },
 };
 
