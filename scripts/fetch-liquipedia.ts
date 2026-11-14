@@ -102,6 +102,29 @@ type TeamRoster = {
   warnings: string[];
   /** インフォボックスから抽出したロゴ画像の絶対 URL。未検出なら null。 */
   logoSourceUrl: string | null;
+  achievements: ParsedAchievement[];
+  matches: ParsedMatch[];
+};
+
+type ParsedAchievement = {
+  tier: string;
+  tournament: string;
+  placement: string;
+  prize: string | null;
+  date: string;
+  sourceUrl: string | null;
+  sourceTitle: string | null;
+};
+
+type ParsedMatch = {
+  opponentTeamName: string;
+  opponentTeamShortName: string | null;
+  opponentTeamLogoUrl: string | null;
+  isWin: boolean | null;
+  score: string | null;
+  date: string;
+  streamUrl: string | null;
+  status: "RECENT" | "UPCOMING";
 };
 
 type TableKind =
@@ -129,6 +152,8 @@ type ApplyStats = {
   membershipsCreated: number;
   membershipsUpdated: number;
   membershipsClosed: number;
+  achievementsCreated: number;
+  matchesCreated: number;
   skipped: number;
   warnings: string[];
 };
@@ -842,6 +867,286 @@ export function extractTeamLogoUrl(html: string): string | null {
   }
 
   return null;
+}
+
+function sectionHeading($: CheerioAPI, keywords: RegExp[]): Cheerio<AnyNode> | null {
+  const headings = $("h2, h3, h4, div.mw-heading").toArray();
+  for (const element of headings) {
+    const heading = $(element);
+    const text = clean(heading.text()).toLowerCase();
+    if (keywords.some((pattern) => pattern.test(text))) {
+      return heading;
+    }
+  }
+  return null;
+}
+
+function nextTableAfter(
+  $: CheerioAPI,
+  heading: Cheerio<AnyNode>,
+): Cheerio<AnyNode> | null {
+  let cursor: Cheerio<AnyNode> | null = heading;
+  for (let step = 0; step < 12 && cursor && cursor.length > 0; step += 1) {
+    const sibling: Cheerio<AnyNode> = cursor.next();
+    if (sibling.length === 0) {
+      cursor = cursor.parent();
+      continue;
+    }
+
+    const table = sibling.is("table.wikitable")
+      ? sibling
+      : sibling.find("table.wikitable").first();
+    if (table.length > 0) return table;
+
+    const table2 = sibling.is(".table2")
+      ? sibling
+      : sibling.find(".table2").first();
+    if (table2.length > 0) {
+      const nested = table2.find("table").first();
+      return nested.length > 0 ? nested : null;
+    }
+
+    cursor = sibling;
+  }
+  return null;
+}
+
+function normalizeColumns(headers: string[]): string[] {
+  return headers.map((header) =>
+    clean(header)
+      .toLowerCase()
+      .replace(/[\[\]\(\)]/g, "")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
+}
+
+function columnIndex(columns: string[], patterns: RegExp[]): number {
+  return columns.findIndex((column) =>
+    patterns.some((pattern) => pattern.test(column)),
+  );
+}
+
+function extractText($: CheerioAPI, cell: Cheerio<AnyNode>): string {
+  const clone = cell.clone();
+  clone.find("sup, .reference, .mw-editsection, .flag").remove();
+  return clean(clone.text());
+}
+
+function parsePrize(text: string): string | null {
+  const normalized = clean(text);
+  if (!normalized || /^[-—]$/.test(normalized)) return null;
+  return normalized;
+}
+
+function parseScore(text: string): {
+  score: string | null;
+  isWin: boolean | null;
+} {
+  const normalized = clean(text).replace(/\s+/g, "");
+  if (!normalized) return { score: null, isWin: null };
+
+  // W / L 表記
+  if (/^w$/i.test(normalized)) return { score: "W", isWin: true };
+  if (/^l$/i.test(normalized)) return { score: "L", isWin: false };
+
+  // 一般的な "2-1" / "2:1" / "2 - 1" 形式。前半が対象チームのスコア。
+  const match =
+    /^(\d+(?:\.\d+)?)[:\-–—]\s*(\d+(?:\.\d+)?)$/.exec(normalized) ??
+    /^(\d+)\s*-\s*(\d+)$/.exec(normalized);
+  if (match) {
+    const teamScore = Number.parseFloat(match[1]);
+    const opponentScore = Number.parseFloat(match[2]);
+    const isWin =
+      Number.isFinite(teamScore) && Number.isFinite(opponentScore)
+        ? teamScore > opponentScore
+        : null;
+    return { score: `${match[1]} - ${match[2]}`, isWin };
+  }
+
+  return { score: normalized, isWin: null };
+}
+
+function extractOpponentLogoUrl(
+  $: CheerioAPI,
+  cell: Cheerio<AnyNode>,
+): string | null {
+  const image = cell.find("img").first();
+  const src = clean(image.attr("src") ?? image.attr("data-src"));
+  return resolveImageUrl(src);
+}
+
+function extractMatchStreamUrl(
+  $: CheerioAPI,
+  cell: Cheerio<AnyNode>,
+): string | null {
+  const anchors = cell.find("a[href]").toArray();
+  for (const element of anchors) {
+    const href = clean($(element).attr("href"));
+    if (/youtube\.com\/watch|youtu\.be\//i.test(href)) {
+      return href.startsWith("http") ? href : `${BASE_URL}${href}`;
+    }
+  }
+  return null;
+}
+
+function buildYouTubeSearchUrl(
+  teamName: string,
+  opponentName: string,
+  tournament?: string | null,
+): string {
+  const query = [teamName, "vs", opponentName, tournament]
+    .filter(Boolean)
+    .join(" ");
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+}
+
+function parseTableAchievements(
+  $: CheerioAPI,
+  table: Cheerio<AnyNode>,
+): ParsedAchievement[] {
+  const achievements: ParsedAchievement[] = [];
+  const headerRow = table.find("tr").first();
+  const headers = headerRow
+    .find("th, td")
+    .toArray()
+    .map((cell) => extractText($, $(cell)));
+  const columns = normalizeColumns(headers);
+
+  const placeIndex = columnIndex(columns, [/place|placement|順位|^#$/]);
+  const tierIndex = columnIndex(columns, [/tier|規模/]);
+  const tournamentIndex = columnIndex(columns, [/tournament|大会|event/]);
+  const dateIndex = columnIndex(columns, [/date|日付|year/]);
+  const prizeIndex = columnIndex(columns, [/prize|賞金|winnings/]);
+
+  // 列特定に失敗した場合は汎用パースを諦めて安全に返す。
+  if (placeIndex < 0 && tournamentIndex < 0) return achievements;
+
+  const rows = table.find("tr").toArray().slice(1);
+  for (const row of rows) {
+    const cells = $(row).find("td").toArray();
+    if (cells.length === 0) continue;
+
+    const placement = placeIndex >= 0 ? extractText($, $(cells[placeIndex])) : "";
+    const tournament =
+      tournamentIndex >= 0
+        ? extractText($, $(cells[tournamentIndex]))
+        : "";
+    if (!tournament && !placement) continue;
+
+    const rawDate = dateIndex >= 0 ? extractText($, $(cells[dateIndex])) : "";
+    const date = normalizeDate(rawDate) ?? "2000-01";
+
+    achievements.push({
+      tier: tierIndex >= 0 ? extractText($, $(cells[tierIndex])) : "",
+      tournament: tournament || placement,
+      placement: placement || "-",
+      prize: prizeIndex >= 0 ? parsePrize(extractText($, $(cells[prizeIndex]))) : null,
+      date,
+      sourceUrl: null,
+      sourceTitle: null,
+    });
+  }
+
+  return achievements;
+}
+
+export function parseTeamAchievements(html: string): ParsedAchievement[] {
+  const $ = load(html);
+  const heading = sectionHeading($, [/achievements|achiev|実績/]);
+  if (!heading) return [];
+
+  const table = nextTableAfter($, heading);
+  if (!table) return [];
+
+  return parseTableAchievements($, table);
+}
+
+function parseTableMatches(
+  $: CheerioAPI,
+  table: Cheerio<AnyNode>,
+  teamName: string,
+): ParsedMatch[] {
+  const matches: ParsedMatch[] = [];
+  const headerRow = table.find("tr").first();
+  const headers = headerRow
+    .find("th, td")
+    .toArray()
+    .map((cell) => extractText($, $(cell)));
+  const columns = normalizeColumns(headers);
+
+  const dateIndex = columnIndex(columns, [/date|日付|time|日時/]);
+  const tournamentIndex = columnIndex(columns, [/tournament|大会|event|league/]);
+  const opponentIndex = columnIndex(columns, [/opponent|vs|相手|enemy|team/]);
+  const scoreIndex = columnIndex(columns, [/score|result|結果|series|スコア/]);
+  const vodIndex = columnIndex(columns, [/vod|links|link|配信|watch|video/]);
+
+  // 対戦相手列またはスコア列がなければマッチ表とみなさない。
+  if (opponentIndex < 0 && scoreIndex < 0) return matches;
+
+  const now = new Date().toISOString().slice(0, 10);
+  const rows = table.find("tr").toArray().slice(1);
+
+  for (const row of rows) {
+    const cells = $(row).find("td").toArray();
+    if (cells.length === 0) continue;
+
+    const opponentCell =
+      opponentIndex >= 0 ? $(cells[opponentIndex]) : $(cells[0]);
+    const opponentTeamName = extractText($, opponentCell) || "Unknown";
+    if (/^date$|^opponent$|^score$|^tournament$/i.test(opponentTeamName)) {
+      continue;
+    }
+
+    const rawDate = dateIndex >= 0 ? extractText($, $(cells[dateIndex])) : "";
+    const rawScore = scoreIndex >= 0 ? extractText($, $(cells[scoreIndex])) : "";
+    const { score, isWin } = parseScore(rawScore);
+
+    let streamUrl: string | null = null;
+    if (vodIndex >= 0) {
+      streamUrl = extractMatchStreamUrl($, $(cells[vodIndex]));
+    }
+    if (!streamUrl) {
+      // VOD列がなくても、行全体から YouTube リンクを探す。
+      streamUrl = extractMatchStreamUrl($, $(row));
+    }
+    if (!streamUrl) {
+      const tournament =
+        tournamentIndex >= 0 ? extractText($, $(cells[tournamentIndex])) : null;
+      streamUrl = buildYouTubeSearchUrl(teamName, opponentTeamName, tournament);
+    }
+
+    const date = normalizeDate(rawDate) ?? now;
+    const status: "RECENT" | "UPCOMING" =
+      isWin === null && date >= now ? "UPCOMING" : "RECENT";
+
+    matches.push({
+      opponentTeamName,
+      opponentTeamShortName: null,
+      opponentTeamLogoUrl: extractOpponentLogoUrl($, opponentCell),
+      isWin,
+      score,
+      date,
+      streamUrl,
+      status,
+    });
+  }
+
+  return matches;
+}
+
+export function parseTeamMatches(
+  html: string,
+  teamName: string,
+): ParsedMatch[] {
+  const $ = load(html);
+  const heading = sectionHeading($, [/matches|match\s*history|試合/]);
+  if (!heading) return [];
+
+  const table = nextTableAfter($, heading);
+  if (!table) return [];
+
+  return parseTableMatches($, table, teamName);
 }
 
 async function shouldSkipTeamUpdate(
@@ -1608,6 +1913,64 @@ async function applyTeamRoster(
       );
     }
   }
+
+  if (!options.dryRun) {
+    await applyTeamAchievements(team.id, roster.achievements, stats);
+    await applyTeamMatches(team.id, roster.matches, stats);
+  }
+}
+
+async function applyTeamAchievements(
+  teamId: string,
+  achievements: ParsedAchievement[],
+  stats: ApplyStats,
+) {
+  if (achievements.length === 0) return;
+
+  await prisma.teamAchievement.deleteMany({ where: { teamId } });
+
+  for (const achievement of achievements) {
+    await prisma.teamAchievement.create({
+      data: {
+        teamId,
+        tier: achievement.tier,
+        tournament: achievement.tournament,
+        placement: achievement.placement,
+        prize: achievement.prize,
+        date: achievement.date,
+        sourceUrl: achievement.sourceUrl,
+        sourceTitle: achievement.sourceTitle,
+      },
+    });
+    stats.achievementsCreated += 1;
+  }
+}
+
+async function applyTeamMatches(
+  teamId: string,
+  matches: ParsedMatch[],
+  stats: ApplyStats,
+) {
+  if (matches.length === 0) return;
+
+  await prisma.teamMatch.deleteMany({ where: { teamId } });
+
+  for (const match of matches) {
+    await prisma.teamMatch.create({
+      data: {
+        teamId,
+        opponentTeamName: match.opponentTeamName,
+        opponentTeamShortName: match.opponentTeamShortName,
+        opponentTeamLogoUrl: match.opponentTeamLogoUrl,
+        isWin: match.isWin,
+        score: match.score,
+        date: match.date,
+        streamUrl: match.streamUrl,
+        status: match.status,
+      },
+    });
+    stats.matchesCreated += 1;
+  }
 }
 
 function pickFinalStatus(entries: RosterEntry[]): PlayerStatus | null {
@@ -1715,6 +2078,8 @@ async function fetchTeam(
   }
 
   const parsed = parseTeamRosterHtml(html);
+  const achievements = parseTeamAchievements(html);
+  const matches = parseTeamMatches(html, team.name);
   return {
     team,
     pageTitle: title,
@@ -1722,6 +2087,8 @@ async function fetchTeam(
     entries: parsed.entries,
     warnings: parsed.warnings,
     logoSourceUrl: extractTeamLogoUrl(html),
+    achievements,
+    matches,
   };
 }
 
@@ -1760,6 +2127,8 @@ async function fetchFromFixture(
   }
 
   const parsed = parseTeamRosterHtml(html);
+  const achievements = parseTeamAchievements(html);
+  const matches = parseTeamMatches(html, team.name);
   return {
     team,
     pageTitle: title,
@@ -1767,6 +2136,8 @@ async function fetchFromFixture(
     entries: parsed.entries,
     warnings: parsed.warnings,
     logoSourceUrl: extractTeamLogoUrl(html),
+    achievements,
+    matches,
   };
 }
 
@@ -1825,6 +2196,8 @@ async function run() {
     membershipsCreated: 0,
     membershipsUpdated: 0,
     membershipsClosed: 0,
+    achievementsCreated: 0,
+    matchesCreated: 0,
     skipped: 0,
     warnings: [],
   };
@@ -1998,6 +2371,8 @@ async function run() {
     `entries=${stats.entries}`,
     `players+${stats.playersCreated}~${stats.playersUpdated}`,
     `memberships+${stats.membershipsCreated}~${stats.membershipsUpdated}/-${stats.membershipsClosed}`,
+    `achievements+${stats.achievementsCreated}`,
+    `matches+${stats.matchesCreated}`,
     `skipped=${stats.skipped}`,
   ].join(" ");
 
