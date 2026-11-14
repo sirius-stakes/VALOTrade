@@ -50,10 +50,10 @@ export const GAME_DEFINITIONS: readonly GameDefinition[] = [
     shortName: "VALO",
     tabLabel: "VALORANT",
     compactLabel: "VALORANT",
-    regionLabel: "Japan",
+    regionLabel: "Pacific / JP Tier 2",
     heroTitle: "プロチーム移籍・ロスター追跡",
     description:
-      "ZETA DIVISION / DetonatioN FocusMe / FENNEL / MURASH GAMING の4チームに限定し、ロスター、LFT / FA 選手、移籍・契約の履歴をひとつのダッシュボードで追跡。データは外部クラウドに送信されません。",
+      "VCT Pacific 全12チームと日本 Tier2（VCJ）主要チームのロスター、LFT / FA 選手、移籍・契約の履歴をひとつのダッシュボードで追跡。データは外部クラウドに送信されません。",
     themeClass: "theme-valorant",
     themeName: "Crimson Red",
     dotClassName:

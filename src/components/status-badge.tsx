@@ -41,6 +41,38 @@ export function StatusBadge({
   );
 }
 
+const ROLE_COLORS: Record<string, string> = {
+  Duelist:
+    "border-rose-400/25 bg-rose-400/[0.08] text-rose-300",
+  Initiator:
+    "border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-300",
+  Controller:
+    "border-sky-400/25 bg-sky-400/[0.08] text-sky-300",
+  Sentinel:
+    "border-amber-400/25 bg-amber-400/[0.08] text-amber-300",
+  Flex: "border-violet-400/25 bg-violet-400/[0.08] text-violet-300",
+  IGL: "border-fuchsia-400/25 bg-fuchsia-400/[0.08] text-fuchsia-300",
+  Coach:
+    "border-zinc-500/30 bg-zinc-500/[0.08] text-zinc-300",
+  Manager:
+    "border-zinc-600/30 bg-zinc-600/[0.08] text-zinc-400",
+  Analyst:
+    "border-zinc-600/30 bg-zinc-600/[0.08] text-zinc-400",
+};
+
+function roleClassName(role: string) {
+  const normalized = role.trim();
+  return (
+    ROLE_COLORS[normalized] ??
+    ROLE_COLORS[
+      Object.keys(ROLE_COLORS).find(
+        (key) => key.toLowerCase() === normalized.toLowerCase(),
+      ) ?? ""
+    ] ??
+    "border-zinc-700/50 bg-zinc-800/30 text-zinc-400"
+  );
+}
+
 export function RoleTag({
   role,
   className,
@@ -51,7 +83,8 @@ export function RoleTag({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded border border-zinc-800/70 bg-zinc-900/40 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-zinc-400",
+        "inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium tracking-wide",
+        roleClassName(role),
         className,
       )}
     >

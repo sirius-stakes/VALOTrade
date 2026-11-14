@@ -44,7 +44,7 @@
 ---
 
 ## Phase 4: VALORANT 全地域拡大＆詳細データ取得
-- [ ] **Phase 4-1: VCT Pacific & JP Tier2（VCJ）のロスター・ロール・国籍取得**
+- [x] **Phase 4-1: VCT Pacific & JP Tier2（VCJ）のロスター・ロール・国籍取得**
   - Pacific 全12チームおよび日本Tier2主要チームのLiquipedia取得。
   - ロール（Duelist / Initiator / Controller / Sentinel / Flex / IGL）バッジ・アイコンおよび国籍コードの自動抽出。
   - 地域別個別更新コマンド（`npm run update:valo-jp`, `npm run update:valo-pacific` 等）の整備。

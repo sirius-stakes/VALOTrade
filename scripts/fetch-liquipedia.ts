@@ -26,9 +26,12 @@ import {
 import { load, type Cheerio, type CheerioAPI } from "cheerio";
 import type { AnyNode } from "domhandler";
 
+import { getCountryMeta } from "../src/lib/nationality";
 import { getRosterCategory, isRosterRole } from "../src/lib/roles";
 import {
   TARGET_TEAMS,
+  VALO_JP_TIER2_TEAMS,
+  VALO_PACIFIC_TEAMS,
   type TargetTeamDefinition,
 } from "../src/lib/target-teams";
 
@@ -52,6 +55,8 @@ type CliOptions = {
   debug: boolean;
   fixture?: string;
   teamFilter?: string;
+  /** 取得対象地域。未指定時は全地域。 */
+  region?: "pacific" | "jp" | "all";
   timeoutMs: number;
   delayMs: number;
 };
@@ -170,12 +175,21 @@ function parseArgs(argv: string[]): CliOptions {
     ) || MIN_REQUEST_INTERVAL_MS,
   );
 
+  const rawRegion = (getOption("region") ?? "").toLowerCase();
+  const region: CliOptions["region"] =
+    rawRegion === "pacific"
+      ? "pacific"
+      : rawRegion === "jp" || rawRegion === "jp-tier2"
+        ? "jp"
+        : "all";
+
   return {
     dryRun: hasFlag("dry-run"),
     verbose: hasFlag("verbose"),
     debug: hasFlag("debug"),
     fixture: getOption("fixture"),
     teamFilter: getOption("team"),
+    region,
     timeoutMs:
       Number.parseInt(getOption("timeout") ?? "30000", 10) || 30000,
     delayMs,
@@ -358,6 +372,17 @@ function isOrganizationKind(kind: TableKind) {
 const STATUS_ROLE_MARKER =
   /^(inactive|retired|lft|fa|free\s+agent|stand-?in|substitute|reserve|bench|loan|trial|trialist|former|none|-)$/i;
 
+const VALORANT_ROLE_PATTERN =
+  /\b(Duelist|Initiator|Controller|Sentinel|Flex|IGL)\b/i;
+
+function extractValorantRole(text: string): string | null {
+  const match = VALORANT_ROLE_PATTERN.exec(text);
+  if (match) {
+    return match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase();
+  }
+  return null;
+}
+
 function resolveRole(kind: TableKind, roleText: string) {
   const text = clean(roleText);
 
@@ -371,6 +396,9 @@ function resolveRole(kind: TableKind, roleText: string) {
     }
     return isOrganizationKind(kind) ? "" : "Player";
   }
+
+  const valorantRole = extractValorantRole(text);
+  if (valorantRole) return valorantRole;
 
   return text;
 }
@@ -440,6 +468,12 @@ function extractRealName(
   return text || null;
 }
 
+function extractCountryCodeFromSrc(src: string | undefined): string | null {
+  if (!src) return null;
+  const match = /\/flag\/([a-z]{2})\.png/i.exec(src);
+  return match?.[1]?.toUpperCase() ?? null;
+}
+
 function extractCountry(
   $: CheerioAPI,
   cell: Cheerio<AnyNode>,
@@ -447,12 +481,18 @@ function extractCountry(
   if (!cell || cell.length === 0) return null;
 
   const image = cell.find(".flag img, img.flag").first();
+  const src = clean(image.attr("src") ?? image.attr("data-src"));
   const value =
+    extractCountryCodeFromSrc(src) ||
     clean(image.attr("alt")) ||
     clean(image.attr("title")) ||
     clean(cell.find("[data-country]").first().attr("data-country"));
 
-  return value || null;
+  if (!value) return null;
+
+  // 国名やゆらぎを ISO 3166-1 alpha-2 風の2文字コードに正規化する。
+  const meta = getCountryMeta(value);
+  return meta?.code ?? value.toUpperCase();
 }
 
 function extractAnnouncementUrl(
@@ -974,14 +1014,36 @@ async function downloadTeamLogo(
 
 /**
  * 取得前のクリーンアップ。
- * タイムライン・在籍履歴・ロスターの古いデータをすべて削除する。
+ * 指定地域（regionCode）に該当する Team / Player とそれに紐づく
+ * MembershipHistory / TransferEvent のみを削除する。
  * 外部キー制約に違反しないよう TransferEvent → MembershipHistory → Player → Team の順。
  */
-async function cleanupExistingRecords() {
-  const transferEvents = await prisma.transferEvent.deleteMany();
-  const memberships = await prisma.membershipHistory.deleteMany();
-  const players = await prisma.player.deleteMany();
-  const teams = await prisma.team.deleteMany();
+async function cleanupExistingRecords(regionCode: string) {
+  const region = await prisma.region.findUnique({
+    where: { code: regionCode },
+    select: { id: true },
+  });
+
+  if (!region) {
+    console.log(`  ℹ️  地域 ${regionCode} のレコードは存在しません（初回実行）`);
+    return {
+      transferEvents: 0,
+      memberships: 0,
+      players: 0,
+      teams: 0,
+    };
+  }
+
+  const where = { regionId: region.id };
+
+  const transferEvents = await prisma.transferEvent.deleteMany({
+    where: { game: { slug: "valorant" } },
+  });
+  const memberships = await prisma.membershipHistory.deleteMany({
+    where: { team: where },
+  });
+  const players = await prisma.player.deleteMany({ where });
+  const teams = await prisma.team.deleteMany({ where });
 
   return {
     transferEvents: transferEvents.count,
@@ -1004,32 +1066,41 @@ async function ensureBaseData() {
     },
   });
 
-  const region = await prisma.region.upsert({
-    where: { code: "JP" },
-    update: {},
-    create: { code: "JP", name: "日本", sortOrder: 0 },
-  });
+  return { game };
+}
 
-  return { game, region };
+async function ensureRegion(regionCode: string, regionName: string) {
+  return prisma.region.upsert({
+    where: { code: regionCode },
+    update: {},
+    create: { code: regionCode, name: regionName, sortOrder: 0 },
+  });
 }
 
 async function ensureTeam(
   team: TargetTeamDefinition,
-  context: Awaited<ReturnType<typeof ensureBaseData>>,
+  gameId: string,
+  regionId: string,
   logoUrl: string | null = null,
 ) {
   const existing = await prisma.team.findFirst({
     where: {
-      gameId: context.game.id,
+      gameId,
       OR: [{ name: team.name }, { shortName: team.shortName }],
     },
   });
 
   if (existing) {
-    if (logoUrl && existing.logoUrl !== logoUrl) {
+    if (
+      (logoUrl && existing.logoUrl !== logoUrl) ||
+      existing.regionId !== regionId
+    ) {
       return prisma.team.update({
         where: { id: existing.id },
-        data: { logoUrl },
+        data: {
+          logoUrl,
+          regionId,
+        },
       });
     }
     return existing;
@@ -1037,8 +1108,8 @@ async function ensureTeam(
 
   return prisma.team.create({
     data: {
-      gameId: context.game.id,
-      regionId: context.region.id,
+      gameId,
+      regionId,
       name: team.name,
       shortName: team.shortName,
       accent: team.accent,
@@ -1112,7 +1183,8 @@ async function closeCurrentMemberships(
 
 async function ensurePlayer(
   entry: RosterEntry,
-  context: Awaited<ReturnType<typeof ensureBaseData>>,
+  gameId: string,
+  regionId: string,
   cache: PlayerCache,
   stats: ApplyStats,
 ) {
@@ -1168,8 +1240,8 @@ async function ensurePlayer(
 
   const created = await prisma.player.create({
     data: {
-      gameId: context.game.id,
-      regionId: context.region.id,
+      gameId,
+      regionId,
       handle: entry.handle,
       realName: entry.realName,
       role: entry.role,
@@ -1373,21 +1445,22 @@ async function upsertTransferEvents(
 
 async function applyTeamRoster(
   roster: TeamRoster,
-  context: Awaited<ReturnType<typeof ensureBaseData>>,
+  gameId: string,
+  regionId: string,
   cache: PlayerCache,
   stats: ApplyStats,
   logoUrl: string | null,
 ) {
-  const team = await ensureTeam(roster.team, context, logoUrl);
+  const team = await ensureTeam(roster.team, gameId, regionId, logoUrl);
   const ordered = [...roster.entries].sort(
     (a, b) => Number(b.isCurrent) - Number(a.isCurrent),
   );
 
   for (const entry of ordered) {
     try {
-      const player = await ensurePlayer(entry, context, cache, stats);
+      const player = await ensurePlayer(entry, gameId, regionId, cache, stats);
       await upsertMembership(entry, player.id, team.id, stats);
-      await upsertTransferEvents(entry, player.id, team, context.game.id);
+      await upsertTransferEvents(entry, player.id, team, gameId);
     } catch (error) {
       stats.skipped += 1;
       stats.warnings.push(
@@ -1560,10 +1633,17 @@ async function fetchFromFixture(
 }
 
 function selectTeams(options: CliOptions) {
-  if (!options.teamFilter) return [...TARGET_TEAMS];
+  const baseTeams =
+    options.region === "pacific"
+      ? [...VALO_PACIFIC_TEAMS]
+      : options.region === "jp"
+        ? [...VALO_JP_TIER2_TEAMS]
+        : [...TARGET_TEAMS];
+
+  if (!options.teamFilter) return baseTeams;
 
   const normalized = options.teamFilter.toLowerCase();
-  return TARGET_TEAMS.filter(
+  return baseTeams.filter(
     (team) =>
       team.liquipediaPage.toLowerCase() === normalized ||
       team.name.toLowerCase() === normalized ||
@@ -1574,9 +1654,12 @@ function selectTeams(options: CliOptions) {
 async function run() {
   const options = parseArgs(process.argv.slice(2));
   const teams = selectTeams(options);
+  const targetRegions = Array.from(
+    new Set(teams.map((team) => team.regionCode)),
+  );
 
   console.log("──────────────────────────────────────────────");
-  console.log(" VALO-ROSTER JP / Liquipedia MediaWiki API updater");
+  console.log(" VALORANT / Liquipedia MediaWiki API updater");
   console.log(` mode       : ${options.dryRun ? "DRY RUN" : "APPLY"}`);
   console.log(` source     : ${options.fixture ? `fixture:${options.fixture}` : API_URL}`);
   console.log(` user-agent : ${USER_AGENT}`);
@@ -1584,6 +1667,7 @@ async function run() {
     ` rate limit : ${options.delayMs}ms (Liquipedia 規約に合わせ最低 ${MIN_REQUEST_INTERVAL_MS}ms)`,
   );
   console.log(` target     : ${teams.map((team) => team.shortName).join(" / ")}`);
+  console.log(` regions    : ${targetRegions.join(" / ")}`);
   console.log("──────────────────────────────────────────────");
 
   if (!/\([^)]*(?:@|https?:\/\/)[^)]*\)/.test(USER_AGENT)) {
@@ -1599,16 +1683,25 @@ async function run() {
   }
 
   if (!options.dryRun) {
-    console.log(
-      "  🧹 既存の TransferEvent / MembershipHistory / Player / Team を削除します...",
-    );
-    const cleaned = await cleanupExistingRecords();
-    console.log(
-      `  🧹 削除完了: transferEvents=${cleaned.transferEvents} / memberships=${cleaned.memberships} / players=${cleaned.players} / teams=${cleaned.teams}`,
-    );
+    for (const regionCode of targetRegions) {
+      console.log(
+        `  🧹 ${regionCode} の TransferEvent / MembershipHistory / Player / Team を削除します...`,
+      );
+      const cleaned = await cleanupExistingRecords(regionCode);
+      console.log(
+        `  🧹 ${regionCode} 削除完了: transferEvents=${cleaned.transferEvents} / memberships=${cleaned.memberships} / players=${cleaned.players} / teams=${cleaned.teams}`,
+      );
+    }
   }
 
   const context = await ensureBaseData();
+
+  const regions = new Map<string, { id: string }>();
+  for (const regionCode of targetRegions) {
+    const region = await ensureRegion(regionCode, regionCode);
+    regions.set(regionCode, region);
+  }
+
   const cache = await loadPlayerCache(context.game.id);
   const stats: ApplyStats = {
     teamsFetched: 0,
@@ -1638,9 +1731,19 @@ async function run() {
 
   try {
     for (const [index, team] of teams.entries()) {
+      const progress = `[${String(index + 1).padStart(2, "0")}/${String(teams.length).padStart(2, "0")}]`;
       console.log(
-        `\n[${index + 1}/${teams.length}] ${team.name} (page=${team.liquipediaPage})`,
+        `\n${progress} Fetching ${team.liquipediaPage} (${team.name})...`,
       );
+
+      const region = regions.get(team.regionCode);
+      if (!region) {
+        stats.teamsFailed += 1;
+        const message = `地域 ${team.regionCode} の Region レコードが見つかりません`;
+        stats.warnings.push(`${team.name}: ${message}`);
+        console.error(`  ❌ ${team.name}: ${message}`);
+        continue;
+      }
 
       try {
         const roster = options.fixture
@@ -1669,7 +1772,14 @@ async function run() {
             );
           }
 
-          await applyTeamRoster(roster, context, cache, stats, logoUrl);
+          await applyTeamRoster(
+            roster,
+            context.game.id,
+            region.id,
+            cache,
+            stats,
+            logoUrl,
+          );
         }
       } catch (error) {
         stats.teamsFailed += 1;
@@ -1685,6 +1795,13 @@ async function run() {
         ) {
           console.error(
             "   Cloudflare Turnstile は自動回避しません。時間を置くか、ブラウザで一度ページを開いてから再実行してください。",
+          );
+        } else if (
+          error instanceof LiquipediaError &&
+          error.kind === "MISSING_PAGE"
+        ) {
+          console.warn(
+            `   ⚠️  Liquipedia ページが見つからないためスキップ: ${team.liquipediaPage}`,
           );
         }
       }

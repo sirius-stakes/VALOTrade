@@ -16,6 +16,7 @@ import { AppHeader } from "@/components/app-header";
 import { ControlBar } from "@/components/control-bar";
 import { FreeAgentCard } from "@/components/free-agent-card";
 import { PlayerModal } from "@/components/player-modal";
+import { RegionTabs, type RegionTab } from "@/components/region-tabs";
 import { SectionNav } from "@/components/section-nav";
 import { SectionPlaceholder } from "@/components/section-placeholder";
 import { TeamCard } from "@/components/team-card";
@@ -74,6 +75,7 @@ export function Dashboard({ data }: DashboardProps) {
   const [showStaff, setShowStaff] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerDto | null>(null);
   const [selectedTeam, setSelectedTeam] = useState<TeamDto | null>(null);
+  const [selectedRegion, setSelectedRegion] = useState<RegionTab>("all");
   const { isFavorite, toggleFavorite } = useFavorites();
 
   const game = getGameDefinition(gameSlug);
@@ -89,6 +91,7 @@ export function Dashboard({ data }: DashboardProps) {
     setGameSlug(nextSlug);
     setSection("roster");
     setStatusFilter("all");
+    setSelectedRegion("all");
     setQuery("");
     setSelectedPlayer(null);
     setSelectedTeam(null);
@@ -105,12 +108,22 @@ export function Dashboard({ data }: DashboardProps) {
   const resetFilters = () => {
     setQuery("");
     setStatusFilter("all");
+    setSelectedRegion("all");
     setSection("roster");
     setSelectedTeam(null);
   };
 
+  const availableRegions = useMemo(
+    () => Array.from(new Set(data.teams.map((team) => team.regionCode))).sort(),
+    [data.teams],
+  );
+
   const filteredTeams = useMemo(() => {
     return data.teams
+      .filter(
+        (team) =>
+          selectedRegion === "all" || team.regionCode === selectedRegion,
+      )
       .map((team) => {
         const teamMatches =
           normalizedQuery.length > 0 &&
@@ -157,6 +170,7 @@ export function Dashboard({ data }: DashboardProps) {
   }, [
     data.teams,
     data.game.slug,
+    selectedRegion,
     normalizedQuery,
     statusFilter,
     showStaff,
@@ -244,6 +258,14 @@ export function Dashboard({ data }: DashboardProps) {
               : undefined
           }
         />
+        {hasGameData && !isStandings && section === "roster" ? (
+          <RegionTabs
+            regions={availableRegions}
+            active={selectedRegion}
+            onChange={setSelectedRegion}
+          />
+        ) : null}
+
         {hasGameData && !isStandings ? (
           <ControlBar
             query={query}
