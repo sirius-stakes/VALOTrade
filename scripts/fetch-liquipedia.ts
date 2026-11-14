@@ -17,10 +17,11 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { PrismaClient, type PlayerStatus } from "@prisma/client";
+import { PrismaClient, type PlayerStatus, type TransferType } from "@prisma/client";
 import { load, type Cheerio, type CheerioAPI } from "cheerio";
 import type { AnyNode } from "domhandler";
 
+import { isRosterRole } from "../src/lib/roles";
 import {
   TARGET_TEAMS,
   type TargetTeamDefinition,
@@ -351,9 +352,6 @@ function isOrganizationKind(kind: TableKind) {
 const STATUS_ROLE_MARKER =
   /^(inactive|retired|lft|fa|free\s+agent|stand-?in|substitute|reserve|bench|loan|trial|trialist|former|none|-)$/i;
 
-const STAFF_ROLE_PATTERN =
-  /player|coach|analyst|manager|igl|duelist|initiator|controller|sentinel|flex|stand-?in|substitute|reserve/i;
-
 function resolveRole(kind: TableKind, roleText: string) {
   const text = clean(roleText);
 
@@ -582,9 +580,12 @@ function parseTableBlock(
     );
     const role = resolveRole(kind, `${roleText} ${statusFromColumn}`);
 
-    // Organization 表には CEO / Streamer / Owner なども並ぶため、
-    // 選手・コーチ・アナリスト・マネージャー等だけをロスターとして扱う。
-    if (isOrganizationKind(kind) && !STAFF_ROLE_PATTERN.test(role)) {
+    // 表示対象は選手（Player / Duelist / IGL 等）とコーチのみ。
+    // Manager / Analyst / Streamer / CEO / Director などのスタッフはスキップする。
+    if (!isRosterRole(role)) {
+      continue;
+    }
+    if (isOrganizationKind(kind) && !role) {
       continue;
     }
 
@@ -961,14 +962,17 @@ async function downloadTeamLogo(
 
 /**
  * 取得前のクリーンアップ。
- * 外部キー制約に違反しないよう MembershipHistory → Player → Team の順で削除する。
+ * タイムライン・在籍履歴・ロスターの古いデータをすべて削除する。
+ * 外部キー制約に違反しないよう TransferEvent → MembershipHistory → Player → Team の順。
  */
 async function cleanupExistingRecords() {
+  const transferEvents = await prisma.transferEvent.deleteMany();
   const memberships = await prisma.membershipHistory.deleteMany();
   const players = await prisma.player.deleteMany();
   const teams = await prisma.team.deleteMany();
 
   return {
+    transferEvents: transferEvents.count,
     memberships: memberships.count,
     players: players.count,
     teams: teams.count,
@@ -1254,6 +1258,76 @@ async function upsertMembership(
   else stats.membershipsCreated += 1;
 }
 
+async function upsertTransferEvents(
+  entry: RosterEntry,
+  playerId: string,
+  team: { name: string; shortName: string },
+  gameId: string,
+) {
+  const events: Array<{
+    type: TransferType;
+    eventDate: string;
+    fromTeamName: string | null;
+    toTeamName: string | null;
+  }> = [];
+
+  if (entry.startDate) {
+    events.push({
+      type: "JOIN",
+      eventDate: entry.startDate,
+      fromTeamName: null,
+      toTeamName: team.name,
+    });
+  }
+
+  if (!entry.isCurrent && entry.endDate) {
+    events.push({
+      type: entry.status === "INACTIVE" ? "INACTIVE" : "LEAVE",
+      eventDate: entry.endDate,
+      fromTeamName: team.name,
+      toTeamName: null,
+    });
+  }
+
+  for (const event of events) {
+    const dedupeKey = [
+      "liquipedia",
+      team.shortName,
+      entry.handle.toLowerCase(),
+      event.type,
+      event.eventDate,
+    ].join("|");
+
+    await prisma.transferEvent.upsert({
+      where: { dedupeKey },
+      update: {
+        playerId,
+        playerHandle: entry.handle,
+        role: entry.role,
+        fromTeamName: event.fromTeamName,
+        toTeamName: event.toTeamName,
+        eventDate: event.eventDate,
+        sourceUrl: entry.announcementUrl,
+        sourceTitle: "Liquipedia",
+      },
+      create: {
+        gameId,
+        playerId,
+        playerHandle: entry.handle,
+        role: entry.role,
+        type: event.type,
+        eventDate: event.eventDate,
+        fromTeamName: event.fromTeamName,
+        toTeamName: event.toTeamName,
+        sourceUrl: entry.announcementUrl,
+        sourceTitle: "Liquipedia",
+        dedupeKey,
+        rawText: `${entry.handle} ${event.type.toLowerCase()} ${team.name}`,
+      },
+    });
+  }
+}
+
 async function applyTeamRoster(
   roster: TeamRoster,
   context: Awaited<ReturnType<typeof ensureBaseData>>,
@@ -1270,6 +1344,7 @@ async function applyTeamRoster(
     try {
       const player = await ensurePlayer(entry, context, cache, stats);
       await upsertMembership(entry, player.id, team.id, stats);
+      await upsertTransferEvents(entry, player.id, team, context.game.id);
     } catch (error) {
       stats.skipped += 1;
       stats.warnings.push(
@@ -1482,11 +1557,11 @@ async function run() {
 
   if (!options.dryRun) {
     console.log(
-      "  🧹 既存の MembershipHistory / Player / Team を削除します...",
+      "  🧹 既存の TransferEvent / MembershipHistory / Player / Team を削除します...",
     );
     const cleaned = await cleanupExistingRecords();
     console.log(
-      `  🧹 削除完了: memberships=${cleaned.memberships} / players=${cleaned.players} / teams=${cleaned.teams}`,
+      `  🧹 削除完了: transferEvents=${cleaned.transferEvents} / memberships=${cleaned.memberships} / players=${cleaned.players} / teams=${cleaned.teams}`,
     );
   }
 

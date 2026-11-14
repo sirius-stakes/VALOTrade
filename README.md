@@ -172,9 +172,11 @@ API リクエストには以下を必ず実装しています。
 
 ### 更新結果
 
-- 実行時は最初に既存の `MembershipHistory` → `Player` → `Team` をすべて削除し、4 チーム分を新規登録します（`--dry-run` 時は削除しません）。
+- 実行時は最初に既存の `TransferEvent` → `MembershipHistory` → `Player` → `Team` をすべて削除し、4 チーム分を新規登録します（`--dry-run` 時は削除しません）。
 - チームページのインフォボックスからロゴ画像を取得し、`public/logos/{zeta,dfm,fennel,murash}.png` に保存します。DB の `Team.logoUrl` には `/logos/{slug}.png` を保存します。
-- 選手・スタッフは `Player` に保存され、ロール（Player / Head Coach など）と在籍期間は `MembershipHistory` に保存されます。
+- 取得・表示対象は選手（Player / Duelist / IGL など）とコーチ（Coach / Head Coach / Assistant Coach など）のみです。Manager / Analyst / Streamer / CEO / Director などのスタッフは保存・表示しません。
+- 選手・コーチは `Player` に保存され、ロールと在籍期間は `MembershipHistory`、加入・退団は `TransferEvent` に保存されます。
+- チームカード内は Active 選手 → Sub / Reserve → LFT / FA / Inactive → Coach の順で表示します。
 - 現役ロスターは `isCurrent=true`、Inactive / Former は退団・休止年月を `endDate` に入れて `isCurrent=false` にします。
 - 実行結果は `UpdateLog` に保存され、ヘッダーの `Last synced` に反映されます。
 - 取得に失敗した場合も `UpdateLog` に `FAILED` として記録されます。
@@ -205,10 +207,9 @@ Game 1 ── * Team * ── 1 Region
 `npm run db:seed` で以下を投入します（すべてデモ用のフィクションデータです）。
 
 - 4 チーム: ZETA DIVISION / DetonatioN FocusMe / FENNEL / MURASH GAMING
-- 各チーム 6 名（選手 + コーチ、一部 Sub）: 合計 24 名
-- 上記4チームの元所属である LFT 3 名 / FA 2 名 / 休止（Inactive）1 名
-- 対象4チーム内の過去所属・移籍履歴と公式発表 URL
-- 移籍タイムライン用のイベントと初期 `UpdateLog`
+- 各チーム 6 名（選手 5 名 + コーチ 1 名、一部 Sub）: 合計 24 名
+- 各チームの現在所属のみ（過去のモック移籍履歴・移籍イベントは投入しません）
+- 初期 `UpdateLog`
 
 > 実在チーム名をモックとして使用していますが、選手名・履歴・発表 URL はデモ用です。実データではありません。
 

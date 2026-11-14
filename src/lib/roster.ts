@@ -2,6 +2,10 @@ import type { PlayerStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { roleRank } from "@/lib/status";
+import {
+  isRosterRole,
+  rosterPriority,
+} from "@/lib/roles";
 import { isTargetTeamName } from "@/lib/target-teams";
 import type {
   DashboardData,
@@ -88,6 +92,12 @@ function mapPlayer(player: PlayerWithMemberships): PlayerDto {
 }
 
 function comparePlayers(a: PlayerDto, b: PlayerDto) {
+  // コーチはステータスに関係なく一番下にまとめる。
+  const priorityDiff =
+    rosterPriority(a.currentRole, a.status) -
+    rosterPriority(b.currentRole, b.status);
+  if (priorityDiff !== 0) return priorityDiff;
+
   const roleDiff = roleRank(a.currentRole ?? "") - roleRank(b.currentRole ?? "");
   if (roleDiff !== 0) return roleDiff;
   return a.handle.localeCompare(b.handle, "ja");
@@ -182,7 +192,12 @@ export async function getDashboardData(): Promise<DashboardData | null> {
     ) {
       continue;
     }
-    playerMap.set(player.id, mapPlayer(player));
+
+    const dto = mapPlayer(player);
+    const primaryRole = dto.currentRole ?? dto.memberships[0]?.role ?? null;
+    if (!isRosterRole(primaryRole)) continue;
+
+    playerMap.set(player.id, dto);
   }
 
   const targetTeams = game.teams.filter(
@@ -238,6 +253,7 @@ export async function getDashboardData(): Promise<DashboardData | null> {
         isTargetTeamName(event.fromTeamName) ||
         isTargetTeamName(event.toTeamName),
     )
+    .filter((event) => isRosterRole(event.role))
     .map((event) => ({
       id: event.id,
       playerId: event.playerId,

@@ -1,30 +1,18 @@
-import {
-  PrismaClient,
-  type PlayerStatus,
-  type TransferType,
-} from "@prisma/client";
+import { PrismaClient, type PlayerStatus } from "@prisma/client";
 
 process.env.DATABASE_URL ??= "file:./dev.db";
 
 const prisma = new PrismaClient();
 
-type SeedHistory = {
-  team: string;
-  role: string;
-  startDate: string;
-  endDate: string;
-  announcementUrl?: string;
-};
-
 type SeedPlayer = {
   handle: string;
   realName?: string;
   status: PlayerStatus;
-  role?: string;
-  startDate?: string;
+  /** 選手（Duelist / IGL など）またはコーチ（Coach など）のみ。 */
+  role: string;
+  startDate: string;
   note?: string;
   xUrl?: string;
-  history?: SeedHistory[];
 };
 
 type SeedTeam = {
@@ -39,14 +27,10 @@ type SeedTeam = {
   roster: SeedPlayer[];
 };
 
-type SeedFreeAgent = SeedPlayer & {
-  regionCode: string;
-  history: SeedHistory[];
-};
-
 /**
  * 取得・表示対象は ZETA / DFM / FENNEL / MURASH GAMING の 4 チームのみ。
- * 初期データ内の所属履歴・移籍も、この 4 チームの範囲内だけで構成する。
+ * シードデータも各チームの選手・コーチと現在の所属だけに限定し、
+ * 古いモックの移籍履歴・移籍イベントは投入しない。
  */
 const teams: SeedTeam[] = [
   {
@@ -67,14 +51,6 @@ const teams: SeedTeam[] = [
         role: "Duelist",
         startDate: "2024-01",
         note: "チームのエースデュエリスト。2026 VCT Pacific でも主力として出場。",
-        history: [
-          {
-            team: "DFM",
-            role: "Duelist",
-            startDate: "2022-04",
-            endDate: "2023-12",
-          },
-        ],
       },
       {
         handle: "Nagi",
@@ -83,14 +59,6 @@ const teams: SeedTeam[] = [
         role: "Initiator",
         startDate: "2025-02",
         note: "情報奪取とエントリーを担うイニシエーター。",
-        history: [
-          {
-            team: "FENNEL",
-            role: "Initiator",
-            startDate: "2023-01",
-            endDate: "2025-01",
-          },
-        ],
       },
       {
         handle: "Sora",
@@ -107,14 +75,6 @@ const teams: SeedTeam[] = [
         role: "Sentinel",
         startDate: "2025-02",
         note: "サイトホールドとリテイク判断を支えるセンチネル。",
-        history: [
-          {
-            team: "MURASH",
-            role: "Sentinel",
-            startDate: "2023-06",
-            endDate: "2025-01",
-          },
-        ],
       },
       {
         handle: "Rin",
@@ -152,14 +112,6 @@ const teams: SeedTeam[] = [
         role: "Duelist",
         startDate: "2025-01",
         note: "高精度のエイムを武器にするデュエリスト。",
-        history: [
-          {
-            team: "FENNEL",
-            role: "Duelist",
-            startDate: "2023-03",
-            endDate: "2024-12",
-          },
-        ],
       },
       {
         handle: "Ren",
@@ -220,15 +172,7 @@ const teams: SeedTeam[] = [
         status: "ACTIVE",
         role: "Duelist",
         startDate: "2025-02",
-        note: "ZETAから移籍したエース。",
-        history: [
-          {
-            team: "ZETA",
-            role: "Duelist",
-            startDate: "2022-05",
-            endDate: "2025-01",
-          },
-        ],
+        note: "チームのエースデュエリスト。",
       },
       {
         handle: "Koh",
@@ -289,15 +233,7 @@ const teams: SeedTeam[] = [
         status: "ACTIVE",
         role: "Duelist",
         startDate: "2025-01",
-        note: "DFMから移籍した若手エース。",
-        history: [
-          {
-            team: "DFM",
-            role: "Duelist",
-            startDate: "2023-03",
-            endDate: "2024-12",
-          },
-        ],
+        note: "チームの若手エース。",
       },
       {
         handle: "Reiji",
@@ -343,195 +279,6 @@ const teams: SeedTeam[] = [
   },
 ];
 
-/**
- * LFT / FA / 休止選手も、必ず上記 4 チームのいずれかに在籍していた選手だけを登録する。
- */
-const freeAgents: SeedFreeAgent[] = [
-  {
-    handle: "Rui",
-    realName: "塚本 塁",
-    status: "LFT",
-    regionCode: "JP",
-    note: "2026年8月にZETAを退団。DuelistとしてLFT中。",
-    history: [
-      {
-        team: "ZETA",
-        role: "Duelist",
-        startDate: "2023-01",
-        endDate: "2026-08",
-        announcementUrl: "https://zetadivision.com/news",
-      },
-      {
-        team: "DFM",
-        role: "Duelist",
-        startDate: "2021-06",
-        endDate: "2022-12",
-        announcementUrl: "https://www.detonation.co.jp/news",
-      },
-    ],
-  },
-  {
-    handle: "Miyu",
-    realName: "宮本 美優",
-    status: "LFT",
-    regionCode: "JP",
-    note: "2026年9月にFENNELを退団。IGL経験のあるController。",
-    history: [
-      {
-        team: "FENNEL",
-        role: "Controller",
-        startDate: "2022-04",
-        endDate: "2026-09",
-        announcementUrl: "https://fennel.gg/news",
-      },
-    ],
-  },
-  {
-    handle: "Toya",
-    realName: "遠谷 東也",
-    status: "LFT",
-    regionCode: "JP",
-    note: "2026年8月にDFMを退団。Sentinel / Flexとして活動中。",
-    history: [
-      {
-        team: "DFM",
-        role: "Sentinel",
-        startDate: "2023-02",
-        endDate: "2026-08",
-        announcementUrl: "https://www.detonation.co.jp/news",
-      },
-      {
-        team: "MURASH",
-        role: "Flex",
-        startDate: "2021-09",
-        endDate: "2023-01",
-        announcementUrl: "https://murashgaming.jp/",
-      },
-    ],
-  },
-  {
-    handle: "Sho",
-    realName: "庄司 翔",
-    status: "FA",
-    regionCode: "JP",
-    note: "2026年9月にDFMとの契約を終了。フリーエージェント。",
-    history: [
-      {
-        team: "DFM",
-        role: "Initiator",
-        startDate: "2021-01",
-        endDate: "2026-09",
-        announcementUrl: "https://www.detonation.co.jp/news",
-      },
-      {
-        team: "ZETA",
-        role: "Initiator",
-        startDate: "2020-05",
-        endDate: "2020-12",
-        announcementUrl: "https://zetadivision.com/news",
-      },
-    ],
-  },
-  {
-    handle: "Hana",
-    realName: "花村 華",
-    status: "FA",
-    regionCode: "JP",
-    note: "2026年10月にFENNELを退団。Flexとして移籍先を探索中。",
-    history: [
-      {
-        team: "FENNEL",
-        role: "Flex",
-        startDate: "2022-06",
-        endDate: "2026-10",
-        announcementUrl: "https://fennel.gg/news",
-      },
-      {
-        team: "MURASH",
-        role: "Initiator",
-        startDate: "2021-02",
-        endDate: "2022-05",
-        announcementUrl: "https://murashgaming.jp/",
-      },
-    ],
-  },
-  {
-    handle: "Kiri",
-    realName: "桐生 霧",
-    status: "INACTIVE",
-    regionCode: "JP",
-    note: "2025年6月に現役引退。現在はストリーマーとして活動。",
-    history: [
-      {
-        team: "MURASH",
-        role: "Controller",
-        startDate: "2022-01",
-        endDate: "2025-06",
-        announcementUrl: "https://murashgaming.jp/",
-      },
-    ],
-  },
-];
-
-type SeedTransferEvent = {
-  gameId: string;
-  playerId: string;
-  playerHandle: string;
-  fromTeamName?: string | null;
-  toTeamName?: string | null;
-  role?: string | null;
-  type: TransferType;
-  eventDate: string;
-  sourceUrl?: string | null;
-  sourceTitle?: string | null;
-  rawText?: string | null;
-  dedupeKey: string;
-};
-
-const seededTransferEvents: SeedTransferEvent[] = [];
-const seededTransferKeys = new Set<string>();
-
-/** YYYY-MM をタイムライン用の YYYY-MM-01 に変換する。 */
-function monthToDate(value: string) {
-  return /^\d{4}-\d{2}$/.test(value) ? `${value}-01` : value;
-}
-
-function registerTransferEvent(input: {
-  gameId: string;
-  playerId: string;
-  playerHandle: string;
-  fromTeamName?: string | null;
-  toTeamName?: string | null;
-  role?: string | null;
-  type: TransferType;
-  eventDate: string;
-  sourceUrl?: string | null;
-  rawText?: string | null;
-}) {
-  const eventDate = monthToDate(input.eventDate);
-  const dedupeKey = [
-    "seed",
-    input.playerHandle,
-    input.type,
-    eventDate,
-    input.fromTeamName ?? "",
-    input.toTeamName ?? "",
-    input.role ?? "",
-  ]
-    .join("|")
-    .toLowerCase();
-
-  if (seededTransferKeys.has(dedupeKey)) return;
-  seededTransferKeys.add(dedupeKey);
-
-  seededTransferEvents.push({
-    ...input,
-    eventDate,
-    sourceTitle: "ローカルシードデータ",
-    dedupeKey,
-  });
-}
-
 async function main() {
   console.log("🧹 既存データを削除中...");
 
@@ -557,32 +304,19 @@ async function main() {
     },
   });
 
-  const [jp, kr] = await Promise.all([
-    prisma.region.create({
-      data: { code: "JP", name: "日本", sortOrder: 0 },
-    }),
-    prisma.region.create({
-      data: { code: "KR", name: "韓国", sortOrder: 1 },
-    }),
-  ]);
-
-  const regionMap = new Map<string, string>([
-    [jp.code, jp.id],
-    [kr.code, kr.id],
-  ]);
+  const jp = await prisma.region.create({
+    data: { code: "JP", name: "日本", sortOrder: 0 },
+  });
 
   console.log("🛡️  対象4チームを作成中...");
 
-  const teamMap = new Map<
-    string,
-    { id: string; newsUrl: string; name: string }
-  >();
+  const teamMap = new Map<string, { id: string; newsUrl: string }>();
 
   for (const [index, team] of teams.entries()) {
     const created = await prisma.team.create({
       data: {
         gameId: game.id,
-        regionId: regionMap.get(team.regionCode) ?? jp.id,
+        regionId: jp.id,
         name: team.name,
         shortName: team.shortName,
         logoUrl: team.logoUrl,
@@ -597,11 +331,10 @@ async function main() {
     teamMap.set(team.shortName, {
       id: created.id,
       newsUrl: team.newsUrl,
-      name: created.name,
     });
   }
 
-  console.log("👤 プレイヤーと所属履歴を作成中...");
+  console.log("👤 選手・コーチと現在の所属を作成中...");
 
   let playerCount = 0;
 
@@ -610,13 +343,10 @@ async function main() {
     if (!teamRecord) continue;
 
     for (const player of team.roster) {
-      const currentStart = player.startDate ?? "2025-01";
-      const role = player.role ?? "Flex";
-
-      const created = await prisma.player.create({
+      await prisma.player.create({
         data: {
           gameId: game.id,
-          regionId: regionMap.get(team.regionCode) ?? jp.id,
+          regionId: jp.id,
           handle: player.handle,
           realName: player.realName,
           status: player.status,
@@ -629,202 +359,36 @@ async function main() {
             create: [
               {
                 teamId: teamRecord.id,
-                role,
-                startDate: currentStart,
+                role: player.role,
+                startDate: player.startDate,
                 endDate: null,
                 isCurrent: true,
                 announcementUrl: teamRecord.newsUrl,
                 sourceNote: "ローカルシードデータ",
               },
-              ...(player.history ?? []).map((history) => {
-                const previousTeam = teamMap.get(history.team);
-                if (!previousTeam) {
-                  throw new Error(
-                    `履歴チームが見つかりません: ${history.team} (${player.handle})`,
-                  );
-                }
-                return {
-                  teamId: previousTeam.id,
-                  role: history.role,
-                  startDate: history.startDate,
-                  endDate: history.endDate,
-                  isCurrent: false,
-                  announcementUrl:
-                    history.announcementUrl ?? previousTeam.newsUrl,
-                  sourceNote: "ローカルシードデータ",
-                };
-              }),
             ],
           },
         },
       });
 
-      registerTransferEvent({
-        gameId: game.id,
-        playerId: created.id,
-        playerHandle: player.handle,
-        toTeamName: teamRecord.name,
-        role,
-        type: "JOIN",
-        eventDate: currentStart,
-        sourceUrl: teamRecord.newsUrl,
-        rawText: `${player.handle} joins ${teamRecord.name}`,
-      });
-
-      for (const history of player.history ?? []) {
-        const previousTeam = teamMap.get(history.team);
-        if (!previousTeam) continue;
-
-        registerTransferEvent({
-          gameId: game.id,
-          playerId: created.id,
-          playerHandle: player.handle,
-          toTeamName: previousTeam.name,
-          role: history.role,
-          type: "JOIN",
-          eventDate: history.startDate,
-          sourceUrl: history.announcementUrl ?? previousTeam.newsUrl,
-          rawText: `${player.handle} joins ${previousTeam.name}`,
-        });
-        registerTransferEvent({
-          gameId: game.id,
-          playerId: created.id,
-          playerHandle: player.handle,
-          fromTeamName: previousTeam.name,
-          role: history.role,
-          type: "LEAVE",
-          eventDate: history.endDate,
-          sourceUrl: history.announcementUrl ?? previousTeam.newsUrl,
-          rawText: `${player.handle} leaves ${previousTeam.name}`,
-        });
-      }
-
       playerCount += 1;
     }
   }
 
-  for (const player of freeAgents) {
-    const created = await prisma.player.create({
-      data: {
-        gameId: game.id,
-        regionId: regionMap.get(player.regionCode) ?? jp.id,
-        handle: player.handle,
-        realName: player.realName,
-        status: player.status,
-        country: "JP",
-        xUrl:
-          player.xUrl ??
-          `https://x.com/valo_${player.handle.toLowerCase()}`,
-        note: player.note,
-        memberships: {
-          create: player.history.map((history) => {
-            const previousTeam = teamMap.get(history.team);
-            if (!previousTeam) {
-              throw new Error(
-                `履歴チームが見つかりません: ${history.team} (${player.handle})`,
-              );
-            }
-            return {
-              teamId: previousTeam.id,
-              role: history.role,
-              startDate: history.startDate,
-              endDate: history.endDate,
-              isCurrent: false,
-              announcementUrl:
-                history.announcementUrl ?? previousTeam.newsUrl,
-              sourceNote: "ローカルシードデータ",
-            };
-          }),
-        },
-      },
-    });
-
-    const latestHistory = [...player.history].sort((a, b) =>
-      b.endDate.localeCompare(a.endDate),
-    )[0];
-
-    for (const history of player.history) {
-      const previousTeam = teamMap.get(history.team);
-      if (!previousTeam) continue;
-
-      registerTransferEvent({
-        gameId: game.id,
-        playerId: created.id,
-        playerHandle: player.handle,
-        toTeamName: previousTeam.name,
-        role: history.role,
-        type: "JOIN",
-        eventDate: history.startDate,
-        sourceUrl: history.announcementUrl ?? previousTeam.newsUrl,
-        rawText: `${player.handle} joins ${previousTeam.name}`,
-      });
-
-      // 最新の所属は、直後の LFT / FA / INACTIVE イベントが退団も表すため
-      // LEAVE を重複登録しない。
-      if (history === latestHistory) continue;
-
-      registerTransferEvent({
-        gameId: game.id,
-        playerId: created.id,
-        playerHandle: player.handle,
-        fromTeamName: previousTeam.name,
-        role: history.role,
-        type: "LEAVE",
-        eventDate: history.endDate,
-        sourceUrl: history.announcementUrl ?? previousTeam.newsUrl,
-        rawText: `${player.handle} leaves ${previousTeam.name}`,
-      });
-    }
-
-    if (latestHistory) {
-      const previousTeam = teamMap.get(latestHistory.team);
-      registerTransferEvent({
-        gameId: game.id,
-        playerId: created.id,
-        playerHandle: player.handle,
-        fromTeamName: previousTeam?.name ?? latestHistory.team,
-        role: latestHistory.role,
-        type:
-          player.status === "FA"
-            ? "FA"
-            : player.status === "INACTIVE"
-              ? "INACTIVE"
-              : "LFT",
-        eventDate: latestHistory.endDate,
-        sourceUrl:
-          latestHistory.announcementUrl ?? previousTeam?.newsUrl ?? null,
-        rawText: `${player.handle} is ${player.status}`,
-      });
-    }
-
-    playerCount += 1;
-  }
-
-  if (seededTransferEvents.length > 0) {
-    await prisma.transferEvent.createMany({
-      data: seededTransferEvents,
-    });
-  }
-
   const finishedAt = new Date();
-  const lftFaCount = freeAgents.filter(
-    (player) => player.status === "LFT" || player.status === "FA",
-  ).length;
-  const inactiveCount = freeAgents.filter(
-    (player) => player.status === "INACTIVE",
-  ).length;
-  const seedSummary = `${teams.length}チーム / ${playerCount}選手 / LFT・FA ${lftFaCount}名 / 休止 ${inactiveCount}名 / ${seededTransferEvents.length}移籍イベント`;
+  const summary = `${teams.length}チーム / ${playerCount}選手・コーチ / 移籍イベントなし`;
+
   await prisma.updateLog.create({
     data: {
       source: "seed",
       status: "SUCCESS",
-      message: `初期モックデータを投入しました（${seedSummary}）`,
+      message: `初期データを投入しました（${summary}）`,
       startedAt: finishedAt,
       finishedAt,
     },
   });
 
-  console.log(`✅ 完了: ${seedSummary} を投入しました`);
+  console.log(`✅ 完了: ${summary} を投入しました`);
 }
 
 main()
