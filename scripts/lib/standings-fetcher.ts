@@ -87,7 +87,7 @@ export type StandingsStats = {
   warnings: string[];
 };
 
-class LiquipediaError extends Error {
+export class LiquipediaError extends Error {
   constructor(
     message: string,
     readonly kind:

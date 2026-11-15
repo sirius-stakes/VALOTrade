@@ -29,7 +29,10 @@ import type { AnyNode } from "domhandler";
 import { getCountryMeta } from "../src/lib/nationality";
 import { getRosterCategory, isRosterRole } from "../src/lib/roles";
 import { IJL_TEAMS, type IdvTeamDefinition } from "../src/lib/idv-teams";
-import { fetchAndSaveStandingsForGame } from "./lib/standings-fetcher";
+import {
+  fetchAndSaveStandingsForGame,
+  LiquipediaError as StandingsLiquipediaError,
+} from "./lib/standings-fetcher";
 
 process.env.DATABASE_URL ??= "file:./dev.db";
 
@@ -2291,6 +2294,16 @@ async function run() {
       const message = error instanceof Error ? error.message : String(error);
       stats.warnings.push(`順位表取得: ${message}`);
       console.error(`  ❌ 順位表取得: ${message}`);
+
+      if (
+        error instanceof StandingsLiquipediaError &&
+        error.kind === "RATE_LIMIT"
+      ) {
+        console.error(
+          "   🚫 Rate limit (HTTP 429) を検知しました。しばらく時間を置いてから再実行してください。",
+        );
+        throw error;
+      }
     }
 
     if (!options.dryRun && rosters.length > 0) {
