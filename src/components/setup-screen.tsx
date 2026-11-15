@@ -61,11 +61,16 @@ export function SetupScreen({ message }: SetupScreenProps) {
           ))}
         </ol>
 
-        <p className="mt-6 border-t border-zinc-800/70 pt-4 text-[10px] leading-relaxed text-zinc-600">
-          データを初期状態に戻す場合: <code className="text-zinc-400">npm run db:reset</code>
-          <br />
-          ロスター情報の再取得: <code className="text-zinc-400">npm run update</code>
-        </p>
+        <div className="mt-6 border-t border-zinc-800/70 pt-4 text-[10px] leading-relaxed text-zinc-600">
+          <p>データを初期状態に戻す場合: <code className="text-zinc-400">npm run db:reset</code></p>
+          <p className="mt-1">ロスター情報の再取得:</p>
+          <ul className="mt-1 space-y-1 pl-4">
+            <li>VALORANT: <code className="text-zinc-400">npm run update:valo</code></li>
+            <li>League of Legends: <code className="text-zinc-400">npm run update:lol</code></li>
+            <li>Identity V: <code className="text-zinc-400">npm run update:idv</code></li>
+            <li>順位表: <code className="text-zinc-400">npm run update:standings</code></li>
+          </ul>
+        </div>
       </div>
     </div>
   );

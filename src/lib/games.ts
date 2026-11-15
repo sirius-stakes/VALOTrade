@@ -130,6 +130,13 @@ export function getGameDefinition(value: string | null | undefined) {
   );
 }
 
+/** ゲーム slug に対応するロスター更新コマンドを返す。 */
+export function getGameUpdateCommand(slug: string): string {
+  if (slug === "league-of-legends") return "npm run update:lol";
+  if (slug === "identity-v") return "npm run update:idv";
+  return "npm run update:valo";
+}
+
 /** 2階層ナビゲーションのサブタブ定義。 */
 export type DashboardSection = "roster" | "standings" | "transfers" | "lft";
 

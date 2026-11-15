@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import {
   DASHBOARD_SECTIONS,
   getGameDefinition,
+  getGameUpdateCommand,
   type DashboardSection,
 } from "@/lib/games";
 import { isStreamerLikeRole } from "@/lib/roles";
@@ -390,13 +391,7 @@ export function Dashboard({ dataMap, initialGameSlug }: DashboardProps) {
           onGameChange={handleGameChange}
           lastUpdated={data.lastUpdated}
           lastUpdateSource={data.lastUpdateSource}
-          updateCommand={
-            gameSlug === "league-of-legends"
-              ? "npm run update:lol"
-              : gameSlug === "identity-v"
-                ? "npm run update:idv"
-                : "npm run update:valo"
-          }
+          updateCommand={getGameUpdateCommand(gameSlug)}
         />
         <SectionNav
           game={game}
@@ -640,11 +635,7 @@ export function Dashboard({ dataMap, initialGameSlug }: DashboardProps) {
             Last local update:{" "}
             {hasGameData ? data.lastUpdated ?? "未取得" : "—"}
             <span className="mx-2 text-zinc-800">|</span>
-            {gameSlug === "league-of-legends"
-              ? "npm run update:lol"
-              : gameSlug === "identity-v"
-                ? "npm run update:idv"
-                : "npm run update:valo"}
+            {getGameUpdateCommand(gameSlug)}
           </p>
         </footer>
       </main>
@@ -737,34 +728,4 @@ function InfoTile({
   );
 }
 
-function StandingsSkeleton() {
-  return (
-    <div
-      aria-hidden
-      className="overflow-hidden rounded-lg border border-zinc-800/80 bg-zinc-950/40"
-    >
-      <div className="grid grid-cols-[28px_1fr_64px_44px] gap-2 border-b border-zinc-800/80 bg-zinc-900/60 px-3 py-2 text-[8.5px] font-semibold uppercase tracking-[0.14em] text-zinc-600">
-        <span>#</span>
-        <span>Team</span>
-        <span>W-L</span>
-        <span>Pts</span>
-      </div>
-      {[0, 1, 2, 3].map((row) => (
-        <div
-          key={row}
-          className="grid grid-cols-[28px_1fr_64px_44px] items-center gap-2 border-b border-zinc-800/50 px-3 py-2.5 last:border-b-0"
-        >
-          <span className="font-mono text-[10px] text-zinc-700">
-            {row + 1}
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="h-5 w-5 rounded border border-zinc-800 bg-zinc-900/70" />
-            <span className="h-2 w-20 rounded bg-zinc-800/80" />
-          </span>
-          <span className="font-mono text-[10px] text-zinc-700">—</span>
-          <span className="font-mono text-[10px] text-zinc-700">—</span>
-        </div>
-      ))}
-    </div>
-  );
-}
+

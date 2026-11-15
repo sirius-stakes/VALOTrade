@@ -7,6 +7,7 @@ import { TeamLogo } from "@/components/team-logo";
 import { Badge } from "@/components/ui/badge";
 import type { StandingDto, TeamDto } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { getGameUpdateCommand } from "@/lib/games";
 
 type StandingsTableProps = {
   standings: StandingDto[];
@@ -148,7 +149,7 @@ export function StandingsTable({
           </code>{" "}
           または各タイトルの{" "}
           <code className="rounded bg-zinc-900 px-1 py-0.5 text-zinc-500">
-            npm run update:{gameSlug === "league-of-legends" ? "lol" : gameSlug === "identity-v" ? "idv" : "valo"}
+            {getGameUpdateCommand(gameSlug)}
           </code>{" "}
           で取得できます）。
         </p>
