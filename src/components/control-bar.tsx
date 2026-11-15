@@ -1,11 +1,19 @@
 "use client";
 
-import { Search, SlidersHorizontal, UserCog, X } from "lucide-react";
+import {
+  ArrowUpDown,
+  Search,
+  SlidersHorizontal,
+  UserCog,
+  X,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { StatusFilter } from "@/lib/status";
 import { cn } from "@/lib/utils";
+
+export type TeamSortBy = "default" | "name" | "standing";
 
 type ControlBarProps = {
   query: string;
@@ -16,6 +24,9 @@ type ControlBarProps = {
   showStaffToggle?: boolean;
   showStaff?: boolean;
   onShowStaffChange?: (value: boolean) => void;
+  showSort?: boolean;
+  sortBy?: TeamSortBy;
+  onSortByChange?: (value: TeamSortBy) => void;
   placeholder?: string;
   freeAgentCount: number;
   activeCount: number;
@@ -23,6 +34,12 @@ type ControlBarProps = {
   totalCount: number;
   onReset: () => void;
 };
+
+const SORT_OPTIONS: Array<{ value: TeamSortBy; label: string }> = [
+  { value: "default", label: "デフォルト" },
+  { value: "name", label: "チーム名順" },
+  { value: "standing", label: "公式順位順" },
+];
 
 const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
   { value: "all", label: "すべて" },
@@ -39,6 +56,9 @@ export function ControlBar({
   showStaffToggle = false,
   showStaff = false,
   onShowStaffChange,
+  showSort = false,
+  sortBy = "default",
+  onSortByChange,
   placeholder = "選手名・チーム名・ロールで検索...",
   freeAgentCount,
   activeCount,
@@ -118,6 +138,37 @@ export function ControlBar({
                   </button>
                 );
               })}
+            </div>
+          </div>
+        ) : null}
+
+        {showSort ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="hidden items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-zinc-600 md:flex">
+              <ArrowUpDown className="h-3 w-3" />
+              Sort
+            </span>
+            <div
+              role="group"
+              aria-label="チーム並び順"
+              className="inline-flex rounded-md border border-zinc-800/80 bg-black/20 p-0.5"
+            >
+              {SORT_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={sortBy === option.value}
+                  onClick={() => onSortByChange?.(option.value)}
+                  className={cn(
+                    "inline-flex h-7 items-center rounded px-2.5 text-[10.5px] font-medium transition-colors",
+                    sortBy === option.value
+                      ? "bg-brand/10 text-brand"
+                      : "text-zinc-500 hover:text-zinc-200",
+                  )}
+                >
+                  {option.label}
+                </button>
+              ))}
             </div>
           </div>
         ) : null}

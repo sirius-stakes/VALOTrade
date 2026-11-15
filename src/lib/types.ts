@@ -40,6 +40,32 @@ export type PlayerDto = {
   memberships: MembershipDto[];
 };
 
+export type StandingDto = {
+  id: string;
+  teamId: string | null;
+  teamName: string;
+  teamShortName: string | null;
+  teamLogoUrl: string | null;
+  teamAccent: string | null;
+  regionCode: string | null;
+  season: string;
+  split: string;
+  stage: string | null;
+  rank: number;
+  wins: number;
+  losses: number;
+  points: number | null;
+  differential: number | null;
+  tiebreaker: string | null;
+};
+
+export type TeamCurrentStanding = {
+  rank: number;
+  season: string | null;
+  split: string | null;
+  stage: string | null;
+};
+
 export type TeamDto = {
   id: string;
   name: string;
@@ -58,6 +84,8 @@ export type TeamDto = {
   importPlayers: PlayerDto[];
   players: PlayerDto[];
   staff: PlayerDto[];
+  /** 現行シーズンの公式順位（Standing データ紐付け時） */
+  currentStanding: TeamCurrentStanding | null;
   /** 過去大会実績（Phase 4-4 でデータ接続予定） */
   achievements: TeamAchievementDto[];
   /** 直近試合結果・次戦予定（Phase 4-4 でデータ接続予定） */
@@ -115,6 +143,8 @@ export type DashboardData = {
   players: PlayerDto[];
   freeAgents: PlayerDto[];
   transfers: TransferEventDto[];
+  /** 現行シーズンの公式順位表エントリー */
+  standings: StandingDto[];
   lastUpdated: string | null;
   lastUpdateSource: string | null;
   stats: {

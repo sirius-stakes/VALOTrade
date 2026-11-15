@@ -16,6 +16,8 @@ import type {
   DashboardData,
   MembershipDto,
   PlayerDto,
+  StandingDto,
+  TeamCurrentStanding,
   TeamDto,
   TransferEventDto,
 } from "@/lib/types";
@@ -114,6 +116,150 @@ function comparePlayers(a: PlayerDto, b: PlayerDto) {
   const roleDiff = roleRank(a.currentRole ?? "") - roleRank(b.currentRole ?? "");
   if (roleDiff !== 0) return roleDiff;
   return a.handle.localeCompare(b.handle, "ja");
+}
+
+function getSplitPriority(split: string | null, stage: string | null): number {
+  const value = `${split ?? ""} ${stage ?? ""}`.toLowerCase();
+  if (value.includes("stage 2")) return 10;
+  if (value.includes("summer")) return 9;
+  if (value.includes("split 2")) return 8;
+  if (value.includes("stage 1")) return 7;
+  if (value.includes("spring")) return 6;
+  if (value.includes("split 1")) return 5;
+  if (value.includes("circuit points")) return 4;
+  if (value.includes("regular season")) return 3;
+  return 0;
+}
+
+function parseSeason(value: string | null | undefined): number {
+  if (!value) return 0;
+  const match = /\b(\d{4})\b/.exec(value);
+  return match ? Number.parseInt(match[1], 10) : 0;
+}
+
+type StandingWithTeam = {
+  id: string;
+  gameId: string;
+  regionId: string | null;
+  teamId: string | null;
+  teamName: string | null;
+  season: string | null;
+  split: string | null;
+  stage: string | null;
+  rank: number;
+  wins: number;
+  losses: number;
+  points: number | null;
+  differential: number | null;
+  tiebreaker: string | null;
+  team: {
+    id: string;
+    name: string;
+    shortName: string;
+    logoUrl: string | null;
+    accent: string;
+    region: { code: string };
+  } | null;
+  region: { code: string } | null;
+};
+
+function mapStanding(standing: StandingWithTeam): StandingDto {
+  return {
+    id: standing.id,
+    teamId: standing.teamId,
+    teamName: standing.teamName ?? standing.team?.name ?? "Unknown",
+    teamShortName: standing.team?.shortName ?? null,
+    teamLogoUrl: standing.team?.logoUrl ?? null,
+    teamAccent: standing.team?.accent ?? null,
+    regionCode: standing.region?.code ?? standing.team?.region.code ?? null,
+    season: standing.season ?? "",
+    split: standing.split ?? "",
+    stage: standing.stage,
+    rank: standing.rank,
+    wins: standing.wins,
+    losses: standing.losses,
+    points: standing.points,
+    differential: standing.differential,
+    tiebreaker: standing.tiebreaker,
+  };
+}
+
+function resolveCurrentStanding(
+  teamId: string,
+  teamName: string,
+  standings: StandingWithTeam[],
+): TeamCurrentStanding | null {
+  const matches = standings.filter(
+    (standing) =>
+      standing.teamId === teamId ||
+      (standing.teamId === null && standing.teamName === teamName),
+  );
+  if (matches.length === 0) return null;
+
+  const sorted = matches.toSorted((a, b) => {
+    const seasonDiff = parseSeason(b.season) - parseSeason(a.season);
+    if (seasonDiff !== 0) return seasonDiff;
+    const priorityDiff =
+      getSplitPriority(b.split, b.stage) - getSplitPriority(a.split, a.stage);
+    if (priorityDiff !== 0) return priorityDiff;
+    return a.rank - b.rank;
+  });
+
+  const current = sorted[0];
+  if (!current) return null;
+  return {
+    rank: current.rank,
+    season: current.season,
+    split: current.split,
+    stage: current.stage,
+  };
+}
+
+function resolveCurrentStandingsByRegion(
+  standings: StandingWithTeam[],
+): StandingDto[] {
+  const byRegion = new Map<string, StandingWithTeam[]>();
+  for (const standing of standings) {
+    const regionCode = standing.region?.code ?? "Unknown";
+    const list = byRegion.get(regionCode) ?? [];
+    list.push(standing);
+    byRegion.set(regionCode, list);
+  }
+
+  const result: StandingDto[] = [];
+  for (const [, list] of byRegion) {
+    const grouped = new Map<string, StandingWithTeam[]>();
+    for (const standing of list) {
+      const key = `${standing.season}|${standing.split}|${standing.stage ?? ""}`;
+      const group = grouped.get(key) ?? [];
+      group.push(standing);
+      grouped.set(key, group);
+    }
+
+    const groups = Array.from(grouped.values());
+    groups.sort((a, b) => {
+      const seasonDiff =
+        parseSeason(b[0].season) - parseSeason(a[0].season);
+      if (seasonDiff !== 0) return seasonDiff;
+      const priorityDiff =
+        getSplitPriority(b[0].split, b[0].stage) -
+        getSplitPriority(a[0].split, a[0].stage);
+      if (priorityDiff !== 0) return priorityDiff;
+      return a[0].rank - b[0].rank;
+    });
+
+    const currentGroup = groups[0];
+    if (currentGroup) {
+      result.push(...currentGroup.map(mapStanding));
+    }
+  }
+
+  return result.sort((a, b) => {
+    if (a.regionCode && b.regionCode && a.regionCode !== b.regionCode) {
+      return a.regionCode.localeCompare(b.regionCode);
+    }
+    return a.rank - b.rank;
+  });
 }
 
 function isTargetRelatedPlayer(
@@ -234,6 +380,27 @@ export async function getDashboardData(
     (team) => isTarget(team.name) || isTarget(team.shortName),
   );
 
+  const standings = await prisma.standing.findMany({
+    where: { gameId: game.id },
+    include: {
+      team: {
+        select: {
+          id: true,
+          name: true,
+          shortName: true,
+          logoUrl: true,
+          accent: true,
+          region: { select: { code: true } },
+        },
+      },
+      region: { select: { code: true } },
+    },
+    orderBy: [{ season: "desc" }, { rank: "asc" }],
+  });
+
+  const currentStandings = resolveCurrentStandingsByRegion(standings);
+  const allStandings = standings.map(mapStanding);
+
   const teams: TeamDto[] = targetTeams.map((team) => {
     const playerIds = Array.from(
       new Set(team.memberships.map((membership) => membership.playerId)),
@@ -267,6 +434,7 @@ export async function getDashboardData(
       importPlayers,
       players,
       staff,
+      currentStanding: resolveCurrentStanding(team.id, team.name, standings),
       achievements: [],
       matches: [],
     };
@@ -323,6 +491,7 @@ export async function getDashboardData(
     players,
     freeAgents,
     transfers,
+    standings: allStandings,
     lastUpdated: formatUpdatedAt(lastLog?.finishedAt ?? lastLog?.startedAt),
     lastUpdateSource: lastLog?.source ?? null,
     stats: {

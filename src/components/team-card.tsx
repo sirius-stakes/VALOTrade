@@ -24,6 +24,7 @@ type TeamCardProps = {
   isFavorite: boolean;
   onToggleFavorite: () => void;
   onSelectTeam?: () => void;
+  onSelectStandings?: () => void;
   onSelectPlayer: (player: PlayerDto) => void;
 };
 
@@ -33,6 +34,7 @@ export function TeamCard({
   isFavorite,
   onToggleFavorite,
   onSelectTeam,
+  onSelectStandings,
   onSelectPlayer,
 }: TeamCardProps) {
   const accent = getTeamAccent(team.accent);
@@ -109,6 +111,23 @@ export function TeamCard({
                 {team.name}
               </h2>
             </button>
+            {team.currentStanding ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelectStandings?.();
+                }}
+                aria-label={`順位表へ移動（現在 ${team.currentStanding.rank}位）`}
+                title={`公式順位: ${team.currentStanding.rank}位`}
+                className={cn(
+                  "mt-0.5 shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold leading-none transition-colors hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30",
+                  rankBadgeClass(team.currentStanding.rank),
+                )}
+              >
+                #{team.currentStanding.rank}
+              </button>
+            ) : null}
             <button
               type="button"
               aria-pressed={isFavorite}
@@ -218,6 +237,19 @@ export function TeamCard({
       </footer>
     </article>
   );
+}
+
+function rankBadgeClass(rank: number): string {
+  if (rank === 1) {
+    return "border-yellow-400/40 bg-yellow-500/15 text-yellow-200 shadow-[0_0_10px_-3px_rgba(250,204,21,0.35)]";
+  }
+  if (rank === 2) {
+    return "border-slate-300/30 bg-slate-300/12 text-slate-200";
+  }
+  if (rank === 3) {
+    return "border-orange-500/40 bg-orange-600/15 text-orange-200";
+  }
+  return "border-zinc-700/70 bg-zinc-800/70 text-zinc-400";
 }
 
 function RosterRow({

@@ -7,13 +7,12 @@ import {
   Layers,
   SearchX,
   Shield,
-  Trophy,
   UserRoundSearch,
   Users,
 } from "lucide-react";
 
 import { AppHeader } from "@/components/app-header";
-import { ControlBar } from "@/components/control-bar";
+import { ControlBar, type TeamSortBy } from "@/components/control-bar";
 import {
   MarketFilterBar,
   type MarketRoleFilter,
@@ -24,6 +23,7 @@ import { PlayerModal } from "@/components/player-modal";
 import { RegionTabs, type RegionTab } from "@/components/region-tabs";
 import { SectionNav } from "@/components/section-nav";
 import { SectionPlaceholder } from "@/components/section-placeholder";
+import { StandingsTable } from "@/components/standings-table";
 import { TeamCard } from "@/components/team-card";
 import { TeamModal } from "@/components/team-modal";
 import { TransferTimeline } from "@/components/transfer-timeline";
@@ -102,6 +102,7 @@ export function Dashboard({ dataMap, initialGameSlug }: DashboardProps) {
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerDto | null>(null);
   const [selectedTeam, setSelectedTeam] = useState<TeamDto | null>(null);
   const [selectedRegion, setSelectedRegion] = useState<RegionTab>("all");
+  const [sortBy, setSortBy] = useState<TeamSortBy>("default");
   const [marketStatusFilter, setMarketStatusFilter] =
     useState<MarketStatusFilter>("all");
   const [marketRoleFilter, setMarketRoleFilter] =
@@ -150,6 +151,7 @@ export function Dashboard({ dataMap, initialGameSlug }: DashboardProps) {
     setSelectedTeam(null);
     setMarketStatusFilter("all");
     setMarketRoleFilter("all");
+    setSortBy("default");
   };
 
   const handleSectionChange = (next: DashboardSection) => {
@@ -169,6 +171,7 @@ export function Dashboard({ dataMap, initialGameSlug }: DashboardProps) {
     setStatusFilter("all");
     setSelectedRegion("all");
     setSection("roster");
+    setSortBy("default");
     setSelectedTeam(null);
     setMarketStatusFilter("all");
     setMarketRoleFilter("all");
@@ -243,7 +246,19 @@ export function Dashboard({ dataMap, initialGameSlug }: DashboardProps) {
       .sort((a, b) => {
         const aFavorite = isFavorite(data.game.slug, a.shortName) ? 1 : 0;
         const bFavorite = isFavorite(data.game.slug, b.shortName) ? 1 : 0;
-        return bFavorite - aFavorite;
+        if (aFavorite !== bFavorite) return bFavorite - aFavorite;
+
+        if (sortBy === "name") {
+          return a.name.localeCompare(b.name, "ja");
+        }
+
+        if (sortBy === "standing") {
+          const aRank = a.currentStanding?.rank ?? Number.MAX_SAFE_INTEGER;
+          const bRank = b.currentStanding?.rank ?? Number.MAX_SAFE_INTEGER;
+          return aRank - bRank;
+        }
+
+        return 0;
       });
   }, [
     data.teams,
@@ -253,6 +268,7 @@ export function Dashboard({ dataMap, initialGameSlug }: DashboardProps) {
     statusFilter,
     showStaff,
     isFavorite,
+    sortBy,
   ]);
 
   const filteredTransfers = useMemo(() => {
@@ -414,6 +430,9 @@ export function Dashboard({ dataMap, initialGameSlug }: DashboardProps) {
             showStaffToggle={section === "roster"}
             showStaff={showStaff}
             onShowStaffChange={setShowStaff}
+            showSort={section === "roster"}
+            sortBy={sortBy}
+            onSortByChange={setSortBy}
             placeholder={
               section === "transfers"
                 ? "選手名・チーム名・出典で検索..."
@@ -541,20 +560,12 @@ export function Dashboard({ dataMap, initialGameSlug }: DashboardProps) {
             points={[...game.scope, `テーマ: ${game.themeName}`]}
           />
         ) : isStandings ? (
-          <SectionPlaceholder
-            icon={Trophy}
-            eyebrow="Standings / UI Framework"
-            title="リーグ順位表は Phase 6 で実装予定"
-            description="順位表の表示枠とサブナビゲーションは先行して実装済みです。次フェーズで VCT サーキットポイントや勝敗データを取得し、このテーブルへ接続します。"
-            phase="Phase 6"
-            points={[
-              "リーグ公式順位・勝敗・ポイントの取得",
-              "チームカード右上の #1 ランクバッジ",
-              "順位順ソートと順位表の連携",
-            ]}
-          >
-            <StandingsSkeleton />
-          </SectionPlaceholder>
+          <StandingsTable
+            standings={data.standings}
+            teams={data.teams}
+            gameSlug={gameSlug}
+            onSelectTeam={setSelectedTeam}
+          />
         ) : hasResults ? (
           section === "transfers" ? (
             <TransferTimeline
@@ -588,6 +599,7 @@ export function Dashboard({ dataMap, initialGameSlug }: DashboardProps) {
                     toggleFavorite(data.game.slug, team.shortName)
                   }
                   onSelectTeam={() => setSelectedTeam(team)}
+                  onSelectStandings={() => setSection("standings")}
                   onSelectPlayer={setSelectedPlayer}
                 />
               ))}
