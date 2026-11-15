@@ -47,6 +47,16 @@ type ApiParseResponse = {
   };
 };
 
+type ApiSearchResponse = {
+  query?: {
+    search?: Array<{ title: string; snippet?: string }>;
+  };
+  error?: {
+    code?: string;
+    info?: string;
+  };
+};
+
 export type StandingEntry = {
   rank: number;
   teamName: string;
@@ -74,7 +84,8 @@ export type StandingsSource = {
   gameSlug: string;
   regionCode: string;
   label: string;
-  pageTitles: string[];
+  /** MediaWiki 検索 API で最新シーズンの大会ページを探すクエリ。 */
+  searchQueries: string[];
 };
 
 export type StandingsStats = {
@@ -391,7 +402,7 @@ async function requestApi(
 ): Promise<{ title: string; html: string }> {
   const url = `${apiUrl}?action=parse&page=${encodeURIComponent(
     page,
-  )}&prop=text&format=json`;
+  )}&prop=text&redirects=1&format=json`;
 
   await waitForRateLimit(options, purpose);
 
@@ -467,6 +478,104 @@ async function requestApi(
     title: clean(json.parse?.title) || page,
     html,
   };
+}
+
+/**
+ * MediaWiki 検索 API を使い、大会ページの実在する最新タイトルを複数候補から探す。
+ * 推測固定ページ名を順に叩くのを避け、検索結果上位を順位表解析に使う。
+ */
+async function searchStandingPageTitles(
+  apiUrl: string,
+  queries: string[],
+  options: StandingsOptions,
+): Promise<string[]> {
+  const titles: string[] = [];
+  const seen = new Set<string>();
+
+  for (const query of queries) {
+    await waitForRateLimit(options, `「${query}」の大会ページ検索`);
+
+    const url = `${apiUrl}?action=query&list=search&srsearch=${encodeURIComponent(
+      query,
+    )}&srlimit=5&srnamespace=0&format=json`;
+
+    const response = await fetch(url, {
+      redirect: "follow",
+      signal: AbortSignal.timeout(options.timeoutMs),
+      headers: {
+        "User-Agent": USER_AGENT,
+        "Accept-Encoding": "gzip",
+        Accept: "application/json",
+      },
+    });
+
+    const body = await response.text();
+    lastRequestAt = Date.now();
+
+    if (
+      response.status === 403 ||
+      /verify you are human|challenges\.cloudflare\.com\/turnstile/i.test(body)
+    ) {
+      throw new LiquipediaError(
+        `Liquipedia がアクセスをブロックしました (HTTP ${response.status})。Cloudflare Turnstile を自動回避することはできません。`,
+        "BLOCKED",
+      );
+    }
+
+    if (response.status === 429) {
+      const retryAfter = Number.parseInt(
+        response.headers.get("retry-after") ?? "",
+        10,
+      );
+      const backoff = Number.isFinite(retryAfter)
+        ? Math.max(options.delayMs, retryAfter * 1000)
+        : options.delayMs * 2;
+      throw new LiquipediaError(
+        `Rate limit (HTTP 429)。${Math.ceil(backoff / 1000)} 秒待機して再試行します。`,
+        "RATE_LIMIT",
+      );
+    }
+
+    if (!response.ok) {
+      throw new LiquipediaError(
+        `HTTP ${response.status} ${response.statusText} (${url})`,
+        "HTTP",
+      );
+    }
+
+    let json: ApiSearchResponse;
+    try {
+      json = JSON.parse(body) as ApiSearchResponse;
+    } catch {
+      throw new LiquipediaError(
+        `検索 API の JSON を解析できませんでした (${url})`,
+        "PARSE",
+      );
+    }
+
+    if (json.error) {
+      const info = clean(json.error.info) || json.error.code || "unknown";
+      throw new LiquipediaError(
+        `MediaWiki 検索 API エラー: ${info}`,
+        "HTTP",
+      );
+    }
+
+    const results = json.query?.search ?? [];
+    for (const result of results) {
+      if (!seen.has(result.title)) {
+        seen.add(result.title);
+        titles.push(result.title);
+      }
+    }
+
+    if (titles.length > 0) {
+      // 検索結果が得られたらそれ以降のフォールバッククエリは省略。
+      break;
+    }
+  }
+
+  return titles;
 }
 
 function getCanonicalTeamName(
@@ -709,7 +818,27 @@ export async function fetchAndSaveStandingsForSource(
     }
   }
 
-  for (const pageTitle of source.pageTitles) {
+  const pageTitles = await searchStandingPageTitles(
+    apiUrl,
+    source.searchQueries,
+    options,
+  );
+
+  if (pageTitles.length === 0) {
+    stats.sourcesFailed += 1;
+    stats.warnings.push(
+      `${source.label}: 検索で該当する大会ページが見つかりませんでした`,
+    );
+    return stats;
+  }
+
+  if (options.verbose) {
+    console.log(
+      `  🔍 ${source.label}: 候補ページ [${pageTitles.join(", ")}]`,
+    );
+  }
+
+  for (const pageTitle of pageTitles) {
     stats.sourcesTried += 1;
     try {
       const { title, html } = await requestApi(
@@ -876,44 +1005,24 @@ export const STANDINGS_SOURCES: StandingsSource[] = [
     gameSlug: "valorant",
     regionCode: "VCT Pacific (JP)",
     label: "VCT Pacific",
-    pageTitles: [
-      "VCT/2026/Pacific/Stage 1",
-      "VCT/2026/Pacific/Stage 2",
-      "VCT/2025/Pacific/Stage 2",
-      "VCT/2025/Pacific/Stage 1",
-    ],
+    searchQueries: ["VCT Pacific Stage", "Pacific League"],
   },
   {
     gameSlug: "valorant",
     regionCode: "JP Tier 2 (VCJ)",
     label: "VCJ",
-    pageTitles: [
-      "VCJ/2026/Split 1",
-      "VCJ/2026/Split 2",
-      "VCJ/2025/Split 2",
-      "VCJ/2025/Split 1",
-    ],
+    searchQueries: ["VALORANT Challengers Japan"],
   },
   {
     gameSlug: "league-of-legends",
     regionCode: "LCK",
     label: "LCK",
-    pageTitles: [
-      "LCK/2026 Season/Spring Season",
-      "LCK/2026 Season/Summer Season",
-      "LCK/2025 Season/Summer Season",
-      "LCK/2025 Season/Spring Season",
-    ],
+    searchQueries: ["LCK 2026", "LCK Season"],
   },
   {
     gameSlug: "identity-v",
     regionCode: "IJL",
     label: "IJL",
-    pageTitles: [
-      "IJL/2026 Season",
-      "Identity V Japan League/2026 Season",
-      "IJL/2025 Season",
-      "Identity V Japan League/2025 Season",
-    ],
+    searchQueries: ["Identity V Japan League"],
   },
 ];

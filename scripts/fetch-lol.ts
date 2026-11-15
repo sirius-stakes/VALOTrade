@@ -1365,6 +1365,22 @@ async function downloadPlayerAvatar(
     });
     lastRequestAt = Date.now();
 
+    if (response.status === 429) {
+      const retryAfter = Number.parseInt(
+        response.headers.get("retry-after") ?? "",
+        10,
+      );
+      const backoff = Number.isFinite(retryAfter)
+        ? Math.max(options.delayMs, retryAfter * 1000)
+        : options.delayMs * 2;
+      throw new LiquipediaError(
+        `顔写真取得で Rate limit (HTTP 429)。${Math.ceil(
+          backoff / 1000,
+        )} 秒待機して再試行してください。`,
+        "RATE_LIMIT",
+      );
+    }
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status} ${response.statusText}`);
     }
@@ -1858,6 +1874,15 @@ async function applyTeamRoster(
       await upsertMembership(entry, player.id, team.id, stats);
       await upsertTransferEvents(entry, player.id, team, gameId);
     } catch (error) {
+      if (
+        error instanceof LiquipediaError &&
+        error.kind === "RATE_LIMIT"
+      ) {
+        console.error(
+          `   🚫 ${entry.handle} の顔写真取得で Rate limit (HTTP 429) を検知しました。残りの画像ダウンロードを停止します。`,
+        );
+        throw error;
+      }
       stats.skipped += 1;
       stats.warnings.push(
         `${roster.team.name} / ${entry.handle}: ${

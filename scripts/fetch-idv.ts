@@ -80,6 +80,16 @@ type ApiParseResponse = {
   };
 };
 
+type ApiSearchResponse = {
+  query?: {
+    search?: Array<{ title: string }>;
+  };
+  error?: {
+    code?: string;
+    info?: string;
+  };
+};
+
 type RosterEntry = {
   handle: string;
   realName: string | null;
@@ -1166,7 +1176,7 @@ async function requestApi(
 ): Promise<{ title: string; html: string; rawBody: string }> {
   const url = `${API_URL}?action=parse&page=${encodeURIComponent(
     page,
-  )}&prop=text&format=json`;
+  )}&prop=text&redirects=1&format=json`;
   const maxAttempts = 2;
   let lastError: unknown = null;
 
@@ -1282,6 +1292,86 @@ async function requestApi(
       );
 }
 
+/**
+ * ページが存在しない場合に、MediaWiki 検索 API で実在するチームページタイトルを探す。
+ * 表記揺れ（Arneb_with_WoG / Crest_Gaming_Lst 等）への対応。
+ */
+async function searchTeamPageTitle(
+  team: IdvTeamDefinition,
+  options: CliOptions,
+): Promise<string | null> {
+  const queries = [
+    ...new Set([team.name, team.shortName, ...team.aliases]),
+  ];
+
+  for (const query of queries) {
+    await waitForRateLimit(options, `「${query}」のチームページ検索`);
+
+    const url = `${API_URL}?action=query&list=search&srsearch=${encodeURIComponent(
+      query,
+    )}&srlimit=5&srnamespace=0&format=json`;
+
+    const response = await fetch(url, {
+      redirect: "follow",
+      signal: AbortSignal.timeout(options.timeoutMs),
+      headers: {
+        "User-Agent": USER_AGENT,
+        "Accept-Encoding": "gzip",
+        Accept: "application/json",
+      },
+    });
+
+    const body = await response.text();
+    lastRequestAt = Date.now();
+
+    if (
+      response.status === 403 ||
+      /verify you are human|challenges\.cloudflare\.com\/turnstile/i.test(body)
+    ) {
+      throw new LiquipediaError(
+        `Liquipedia がアクセスをブロックしました (HTTP ${response.status})。Cloudflare Turnstile を自動回避することはできません。`,
+        "BLOCKED",
+      );
+    }
+
+    if (response.status === 429) {
+      const retryAfter = Number.parseInt(
+        response.headers.get("retry-after") ?? "",
+        10,
+      );
+      const backoff = Number.isFinite(retryAfter)
+        ? Math.max(options.delayMs, retryAfter * 1000)
+        : options.delayMs * 2;
+      throw new LiquipediaError(
+        `Rate limit (HTTP 429)。${Math.ceil(backoff / 1000)} 秒待機して再試行します。`,
+        "RATE_LIMIT",
+      );
+    }
+
+    if (!response.ok) {
+      continue;
+    }
+
+    let json: ApiSearchResponse;
+    try {
+      json = JSON.parse(body) as ApiSearchResponse;
+    } catch {
+      continue;
+    }
+
+    if (json.error) {
+      continue;
+    }
+
+    const result = json.query?.search?.[0];
+    if (result?.title) {
+      return result.title;
+    }
+  }
+
+  return null;
+}
+
 async function saveDebugBody(
   body: string,
   page: string,
@@ -1363,6 +1453,22 @@ async function downloadPlayerAvatar(
       },
     });
     lastRequestAt = Date.now();
+
+    if (response.status === 429) {
+      const retryAfter = Number.parseInt(
+        response.headers.get("retry-after") ?? "",
+        10,
+      );
+      const backoff = Number.isFinite(retryAfter)
+        ? Math.max(options.delayMs, retryAfter * 1000)
+        : options.delayMs * 2;
+      throw new LiquipediaError(
+        `顔写真取得で Rate limit (HTTP 429)。${Math.ceil(
+          backoff / 1000,
+        )} 秒待機して再試行してください。`,
+        "RATE_LIMIT",
+      );
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status} ${response.statusText}`);
@@ -1857,6 +1963,15 @@ async function applyTeamRoster(
       await upsertMembership(entry, player.id, team.id, stats);
       await upsertTransferEvents(entry, player.id, team, gameId);
     } catch (error) {
+      if (
+        error instanceof LiquipediaError &&
+        error.kind === "RATE_LIMIT"
+      ) {
+        console.error(
+          `   🚫 ${entry.handle} の顔写真取得で Rate limit (HTTP 429) を検知しました。残りの画像ダウンロードを停止します。`,
+        );
+        throw error;
+      }
       stats.skipped += 1;
       stats.warnings.push(
         `${roster.team.name} / ${entry.handle}: ${
@@ -2017,15 +2132,54 @@ async function fetchTeam(
   team: IdvTeamDefinition,
   options: CliOptions,
 ): Promise<TeamRoster> {
-  const pageUrl = `${PAGE_BASE_URL}/${team.liquipediaPage}`;
-  const { title, html, rawBody } = await requestApi(
-    team.liquipediaPage,
-    options,
-    `${team.name} のロスター`,
-  );
+  let pageTitle = team.liquipediaPage;
+  let pageUrl = `${PAGE_BASE_URL}/${pageTitle}`;
+  let title: string;
+  let html: string;
+  let rawBody: string;
+
+  try {
+    const result = await requestApi(
+      pageTitle,
+      options,
+      `${team.name} のロスター`,
+    );
+    title = result.title;
+    html = result.html;
+    rawBody = result.rawBody;
+  } catch (error) {
+    if (
+      error instanceof LiquipediaError &&
+      error.kind === "MISSING_PAGE"
+    ) {
+      console.warn(
+        `  ⚠️  ページ ${team.liquipediaPage} が見つからないため検索フォールバックを試行します。`,
+      );
+      const found = await searchTeamPageTitle(team, options);
+      if (!found) {
+        throw new LiquipediaError(
+          `チームページが見つかりません: ${team.liquipediaPage}`,
+          "MISSING_PAGE",
+        );
+      }
+      console.log(`  🔍 検索でページを発見: ${found}`);
+      pageTitle = found;
+      pageUrl = `${PAGE_BASE_URL}/${pageTitle}`;
+      const result = await requestApi(
+        pageTitle,
+        options,
+        `${team.name} のロスター`,
+      );
+      title = result.title;
+      html = result.html;
+      rawBody = result.rawBody;
+    } else {
+      throw error;
+    }
+  }
 
   if (options.debug) {
-    const debugPath = await saveDebugBody(rawBody, team.liquipediaPage, "json");
+    const debugPath = await saveDebugBody(rawBody, pageTitle, "json");
     console.log(`  🐞 API レスポンスを保存しました: ${debugPath}`);
   }
 
