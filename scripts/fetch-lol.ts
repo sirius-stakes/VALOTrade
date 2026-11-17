@@ -3,14 +3,19 @@
  * 韓国 LCK 全10チームのロスターを取得し、ローカル SQLite (Prisma) に Upsert する。
  *
  * 実行:
- *   npm run update:lol                  # API から LCK チームを取得して DB 更新
+ *   npm run update:lol                  # API から LCK チームを取得して DB 更新（画像なし）
  *   npm run update:lol -- --dry-run     # 取得・解析のみ（DB 更新なし）
  *   npm run update:lol -- --verbose     # 取得した全選手を表示
  *   npm run update:lol -- --force       # 24時間キャッシュを無視して強制更新
+ *   npm run update:lol -- --limit 3     # 先頭3チームのみ取得（テスト用）
+ *   npm run update:lol -- --team=T1     # 特定チームのみ取得
+ *   npm run update:lol -- --with-images # チームロゴ・選手顔写真も取得
  *
  * Liquipedia の利用規約に合わせ、以下を必ず守る:
  *  - 独自の User-Agent（連絡先先入り）と Accept-Encoding: gzip を付与する
- *  - リクエスト間は最低 30 秒あける（IP 制限・レート制限を徹底回避）
+ *  - API・検索・順位表・画像を含む全通信で 30 秒以上の間隔をあける
+ *    （scripts/lib/liquipedia-client.ts の共通リミッターを必ず経由する）
+ *  - 429 を検知したらリトライせず、以降の全通信を停止して取得済みデータのみ保存する
  *  - captcha / Turnstile を回避するような処理は行わない
  */
 
@@ -30,6 +35,18 @@ import { getCountryMeta } from "../src/lib/nationality";
 import { getRosterCategory, isRosterRole } from "../src/lib/roles";
 import { LCK_TEAMS, type LolTeamDefinition } from "../src/lib/lol-teams";
 import {
+  fetchLiquipediaBinary,
+  fetchLiquipediaText,
+  isRateLimited,
+  LiquipediaError,
+  MIN_REQUEST_INTERVAL_MS,
+  playerAvatarPath,
+  resolveExistingImagePath,
+  resolveUserAgent,
+  teamLogoPath,
+  validateUserAgent,
+} from "./lib/liquipedia-client";
+import {
   fetchAndSaveStandingsForGame,
   LiquipediaError as StandingsLiquipediaError,
 } from "./lib/standings-fetcher";
@@ -43,18 +60,8 @@ const API_URL = `${BASE_URL}/leagueoflegends/api.php`;
 const PAGE_BASE_URL = `${BASE_URL}/leagueoflegends`;
 const LOGO_DIR = path.join(process.cwd(), "public", "logos");
 const PLAYER_AVATAR_DIR = path.join(process.cwd(), "public", "players");
-const DEFAULT_USER_AGENT =
-  "LolRosterApp/1.0 (local-personal-tool; contact@example.com)";
-const USER_AGENT =
-  process.env.LIQUIPEDIA_USER_AGENT?.trim() || DEFAULT_USER_AGENT;
-const MIN_REQUEST_INTERVAL_MS = 30000;
+const USER_AGENT = resolveUserAgent();
 const TEAM_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-
-/**
- * 画像 CDN から HTTP 429 を返された時点で true になり、以降の
- * ロゴ・顔写真ダウンロードを打ち切る。ロスター本体の保存は継続する。
- */
-let imageDownloadsStopped = false;
 
 const GAME_SLUG = "league-of-legends";
 const GAME_NAME = "League of Legends";
@@ -68,6 +75,10 @@ type CliOptions = {
   verbose: boolean;
   debug: boolean;
   force: boolean;
+  /** 顔写真・新規ロゴもダウンロードする（既定はスキップ）。 */
+  withImages: boolean;
+  /** 取得するチーム数の上限（テスト用）。 */
+  limit: number | null;
   fixture?: string;
   teamFilter?: string;
   timeoutMs: number;
@@ -211,11 +222,16 @@ function parseArgs(argv: string[]): CliOptions {
     ) || MIN_REQUEST_INTERVAL_MS,
   );
 
+  const rawLimit = Number.parseInt(getOption("limit") ?? "", 10);
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : null;
+
   return {
     dryRun: hasFlag("dry-run"),
     verbose: hasFlag("verbose"),
     debug: hasFlag("debug"),
     force: hasFlag("force"),
+    withImages: hasFlag("with-images"),
+    limit,
     fixture: getOption("fixture"),
     teamFilter: getOption("team"),
     timeoutMs:
@@ -1144,33 +1160,6 @@ async function shouldSkipTeamUpdate(
   return elapsed < TEAM_CACHE_TTL_MS;
 }
 
-class LiquipediaError extends Error {
-  constructor(
-    message: string,
-    readonly kind:
-      | "BLOCKED"
-      | "RATE_LIMIT"
-      | "HTTP"
-      | "NETWORK"
-      | "PARSE"
-      | "MISSING_PAGE",
-  ) {
-    super(message);
-    this.name = "LiquipediaError";
-  }
-}
-
-let lastRequestAt = 0;
-
-async function waitForRateLimit(options: CliOptions, purpose: string) {
-  if (lastRequestAt === 0) return;
-
-  console.log(
-    `  ⏳ rate limit: ${(options.delayMs / 1000).toFixed(1)}s 待機してから ${purpose} を取得します`,
-  );
-  await sleep(options.delayMs);
-}
-
 async function requestApi(
   page: string,
   options: CliOptions,
@@ -1183,55 +1172,14 @@ async function requestApi(
   let lastError: unknown = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    await waitForRateLimit(options, purpose);
-
     try {
-      const response = await fetch(url, {
-        redirect: "follow",
-        signal: AbortSignal.timeout(options.timeoutMs),
-        headers: {
-          "User-Agent": USER_AGENT,
-          "Accept-Encoding": "gzip",
-          Accept: "application/json",
-        },
+      // 30 秒リミッター・User-Agent・429 即停止は共通クライアント側で担保する。
+      const { text: body } = await fetchLiquipediaText(url, {
+        purpose,
+        delayMs: options.delayMs,
+        timeoutMs: options.timeoutMs,
+        accept: "application/json",
       });
-
-      const body = await response.text();
-      lastRequestAt = Date.now();
-
-      if (
-        response.status === 403 ||
-        /verify you are human|challenges\.cloudflare\.com\/turnstile/i.test(
-          body,
-        )
-      ) {
-        throw new LiquipediaError(
-          `Liquipedia がアクセスをブロックしました (HTTP ${response.status})。Cloudflare Turnstile を自動回避することはできません。`,
-          "BLOCKED",
-        );
-      }
-
-      if (response.status === 429) {
-        const retryAfter = Number.parseInt(
-          response.headers.get("retry-after") ?? "",
-          10,
-        );
-        const backoff = Number.isFinite(retryAfter)
-          ? Math.max(options.delayMs, retryAfter * 1000)
-          : options.delayMs * 2;
-
-        throw new LiquipediaError(
-          `Rate limit (HTTP 429)。${Math.ceil(backoff / 1000)} 秒待機して再試行します。`,
-          "RATE_LIMIT",
-        );
-      }
-
-      if (!response.ok) {
-        throw new LiquipediaError(
-          `HTTP ${response.status} ${response.statusText} (${url})`,
-          "HTTP",
-        );
-      }
 
       let json: ApiParseResponse;
       try {
@@ -1267,7 +1215,6 @@ async function requestApi(
         rawBody: body,
       };
     } catch (error) {
-      lastRequestAt = Date.now();
       lastError = error;
       const shouldRetry =
         attempt < maxAttempts &&
@@ -1312,51 +1259,39 @@ async function saveDebugBody(
 
 async function downloadTeamLogo(
   team: LolTeamDefinition,
-  sourceUrl: string,
+  sourceUrl: string | null,
   options: CliOptions,
   stats: ApplyStats,
 ): Promise<string | null> {
-  if (imageDownloadsStopped) return null;
+  const existing = await resolveExistingImagePath(teamLogoPath(team.logoSlug));
+  if (existing) {
+    if (options.verbose) console.log(`  ♻️  既存ロゴを再利用: ${existing}`);
+    return existing;
+  }
+
+  if (!options.withImages || !sourceUrl) return null;
 
   try {
     await mkdir(LOGO_DIR, { recursive: true });
-    await waitForRateLimit(options, `${team.name} のロゴ画像`);
 
-    const response = await fetch(sourceUrl, {
-      redirect: "follow",
-      signal: AbortSignal.timeout(options.timeoutMs),
-      headers: {
-        "User-Agent": USER_AGENT,
-        "Accept-Encoding": "gzip",
-        Accept: "image/*",
-      },
+    const { data } = await fetchLiquipediaBinary(sourceUrl, {
+      purpose: `${team.name} のロゴ画像`,
+      delayMs: options.delayMs,
+      timeoutMs: options.timeoutMs,
+      accept: "image/*",
     });
-    lastRequestAt = Date.now();
-
-    if (response.status === 429) {
-      imageDownloadsStopped = true;
-      const message =
-        "画像取得で HTTP 429 Too Many Requests を検知したため、以降の画像ダウンロードを停止します（取得済みデータは保存します）";
-      stats.warnings.push(`${team.name}: ${message}`);
-      console.warn(`  ⚠️  ${team.name}: ${message}`);
-      return null;
-    }
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} ${response.statusText}`);
-    }
-
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (buffer.length === 0) {
-      throw new Error("画像データが空でした");
-    }
 
     const fileName = `${team.logoSlug}.png`;
-    await writeFile(path.join(LOGO_DIR, fileName), buffer);
+    await writeFile(path.join(LOGO_DIR, fileName), data);
     const localPath = `/logos/${fileName}`;
     console.log(`  🖼️  ロゴを保存しました: ${localPath} (${sourceUrl})`);
     return localPath;
   } catch (error) {
+    if (error instanceof LiquipediaError && error.kind === "RATE_LIMIT") {
+      stats.warnings.push(`${team.name}: ${error.message}`);
+      console.warn(`  ⚠️  ${team.name}: ${error.message}`);
+      return null;
+    }
     const message = error instanceof Error ? error.message : String(error);
     stats.warnings.push(`${team.name}: ロゴ取得に失敗 (${message})`);
     console.warn(`  ⚠️  ロゴ取得に失敗: ${team.name} (${message})`);
@@ -1366,52 +1301,39 @@ async function downloadTeamLogo(
 
 async function downloadPlayerAvatar(
   handle: string,
-  sourceUrl: string,
+  sourceUrl: string | null,
   options: CliOptions,
   stats: ApplyStats,
 ): Promise<string | null> {
-  if (!sourceUrl || imageDownloadsStopped) return null;
+  const existing = await resolveExistingImagePath(playerAvatarPath(handle));
+  if (existing) {
+    if (options.verbose) console.log(`  ♻️  既存の顔写真を再利用: ${existing}`);
+    return existing;
+  }
+
+  if (!sourceUrl || !options.withImages) return null;
 
   try {
     await mkdir(PLAYER_AVATAR_DIR, { recursive: true });
-    await waitForRateLimit(options, `${handle} の顔写真`);
 
-    const response = await fetch(sourceUrl, {
-      redirect: "follow",
-      signal: AbortSignal.timeout(options.timeoutMs),
-      headers: {
-        "User-Agent": USER_AGENT,
-        "Accept-Encoding": "gzip",
-        Accept: "image/*",
-      },
+    const { data } = await fetchLiquipediaBinary(sourceUrl, {
+      purpose: `${handle} の顔写真`,
+      delayMs: options.delayMs,
+      timeoutMs: options.timeoutMs,
+      accept: "image/*",
     });
-    lastRequestAt = Date.now();
 
-    if (response.status === 429) {
-      imageDownloadsStopped = true;
-      const message =
-        "顔写真取得で HTTP 429 Too Many Requests を検知したため、以降の画像ダウンロードを停止します（取得済みデータは保存します）";
-      stats.warnings.push(`${handle}: ${message}`);
-      console.warn(`  ⚠️  ${handle}: ${message}`);
-      return null;
-    }
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} ${response.statusText}`);
-    }
-
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (buffer.length === 0) {
-      throw new Error("画像データが空でした");
-    }
-
-    const safeHandle = handle.replace(/[^a-zA-Z0-9_-]/g, "_");
-    const fileName = `${safeHandle}.png`;
-    await writeFile(path.join(PLAYER_AVATAR_DIR, fileName), buffer);
+    const fileName = `${handle.replace(/[^a-zA-Z0-9_-]/g, "_")}.png`;
+    await writeFile(path.join(PLAYER_AVATAR_DIR, fileName), data);
     const localPath = `/players/${fileName}`;
     console.log(`  🖼️  選手顔写真を保存しました: ${localPath}`);
     return localPath;
   } catch (error) {
+    if (error instanceof LiquipediaError && error.kind === "RATE_LIMIT") {
+      stats.warnings.push(`${handle}: ${error.message}`);
+      console.warn(`  ⚠️  ${handle}: ${error.message}`);
+      return null;
+    }
     const message = error instanceof Error ? error.message : String(error);
     stats.warnings.push(`${handle}: 顔写真取得に失敗 (${message})`);
     console.warn(`  ⚠️  顔写真取得に失敗: ${handle} (${message})`);
@@ -1894,7 +1816,7 @@ async function applyTeamRoster(
         error.kind === "RATE_LIMIT"
       ) {
         console.error(
-          `   🚫 ${entry.handle} の顔写真取得で Rate limit (HTTP 429) を検知しました。残りの画像ダウンロードを停止します。`,
+          `   🚫 ${entry.handle} で HTTP 429 を検知しました。リトライせず以降の全通信を停止します。`,
         );
         throw error;
       }
@@ -2137,15 +2059,18 @@ async function fetchFromFixture(
 function selectTeams(options: CliOptions) {
   const baseTeams = [...LCK_TEAMS];
 
-  if (!options.teamFilter) return baseTeams;
+  const filtered = !options.teamFilter
+    ? baseTeams
+    : baseTeams.filter((team) => {
+        const normalized = options.teamFilter!.toLowerCase();
+        return (
+          team.liquipediaPage.toLowerCase() === normalized ||
+          team.name.toLowerCase() === normalized ||
+          team.shortName.toLowerCase() === normalized
+        );
+      });
 
-  const normalized = options.teamFilter.toLowerCase();
-  return baseTeams.filter(
-    (team) =>
-      team.liquipediaPage.toLowerCase() === normalized ||
-      team.name.toLowerCase() === normalized ||
-      team.shortName.toLowerCase() === normalized,
-  );
+  return options.limit ? filtered.slice(0, options.limit) : filtered;
 }
 
 async function run() {
@@ -2162,13 +2087,13 @@ async function run() {
   );
   console.log(` target     : ${teams.map((team) => team.shortName).join(" / ")}`);
   console.log(` region     : ${REGION_CODE}`);
+  console.log(
+    ` images     : ${options.withImages ? "ON (--with-images)" : "OFF (既存画像のみ再利用)"}`,
+  );
+  if (options.limit) console.log(` limit      : ${options.limit} チーム`);
   console.log("──────────────────────────────────────────────");
 
-  if (!/\([^)]*(?:@|https?:\/\/)[^)]*\)/.test(USER_AGENT)) {
-    throw new Error(
-      "User-Agent に連絡先（メールアドレスまたは URL）を括弧書きで含めてください。例: LolRosterApp/1.0 (local-personal-tool; contact@example.com)",
-    );
-  }
+  validateUserAgent(USER_AGENT);
 
   if (teams.length === 0) {
     throw new Error(
@@ -2205,13 +2130,22 @@ async function run() {
   }
 
   if (!options.dryRun) {
-    console.log(
-      `  🧹 ${REGION_CODE} の TransferEvent / MembershipHistory / Player / Team を削除します...`,
+    const partialRun = Boolean(
+      options.teamFilter || options.limit || options.fixture,
     );
-    const cleaned = await cleanupExistingRecords();
-    console.log(
-      `  🧹 ${REGION_CODE} 削除完了: transferEvents=${cleaned.transferEvents} / memberships=${cleaned.memberships} / players=${cleaned.players} / teams=${cleaned.teams}`,
-    );
+    if (partialRun) {
+      console.log(
+        "  ℹ️  --team / --limit / --fixture 指定のため地域一括クリーンアップをスキップし、取得対象のみ Upsert します",
+      );
+    } else {
+      console.log(
+        `  🧹 ${REGION_CODE} の TransferEvent / MembershipHistory / Player / Team を削除します...`,
+      );
+      const cleaned = await cleanupExistingRecords();
+      console.log(
+        `  🧹 ${REGION_CODE} 削除完了: transferEvents=${cleaned.transferEvents} / memberships=${cleaned.memberships} / players=${cleaned.players} / teams=${cleaned.teams}`,
+      );
+    }
   }
 
   const context = await ensureBaseData();
@@ -2231,6 +2165,7 @@ async function run() {
 
   let status: "SUCCESS" | "PARTIAL" | "FAILED" = "SUCCESS";
   const rosters: TeamRoster[] = [];
+  let stoppedByRateLimit = false;
 
   try {
     for (const [index, team] of teamsToFetch.entries()) {
@@ -2251,16 +2186,14 @@ async function run() {
         printTeamResult(roster);
 
         if (!options.dryRun) {
-          const logoUrl = roster.logoSourceUrl
-            ? await downloadTeamLogo(
-                roster.team,
-                roster.logoSourceUrl,
-                options,
-                stats,
-              )
-            : null;
+          const logoUrl = await downloadTeamLogo(
+            roster.team,
+            roster.logoSourceUrl,
+            options,
+            stats,
+          );
 
-          if (!roster.logoSourceUrl) {
+          if (!roster.logoSourceUrl && options.withImages) {
             stats.warnings.push(
               `${team.name}: インフォボックスのロゴ画像が見つかりませんでした`,
             );
@@ -2289,9 +2222,10 @@ async function run() {
           error.kind === "RATE_LIMIT"
         ) {
           console.error(
-            "   🚫 Rate limit (HTTP 429) を検知しました。しばらく時間を置いてから再実行してください。",
+            "   🚫 以降の全通信を停止し、取得済みデータのみ保存して終了します。しばらく時間を置いてから再実行してください。",
           );
-          throw error;
+          stoppedByRateLimit = true;
+          break;
         } else if (
           error instanceof LiquipediaError &&
           error.kind === "BLOCKED"
@@ -2310,40 +2244,42 @@ async function run() {
       }
     }
 
-    // 公式順位表の取得・保存（Phase 6-1）
-    try {
-      await waitForRateLimit(options, "LCK 順位表");
-      const standingStats = await fetchAndSaveStandingsForGame(
-        prisma,
-        BASE_URL,
-        API_URL,
-        "league-of-legends",
-        {
-          dryRun: options.dryRun,
-          verbose: options.verbose,
-          force: options.force,
-          debug: options.debug,
-          delayMs: options.delayMs,
-          timeoutMs: options.timeoutMs,
-        },
-      );
-      stats.standingsCreated += standingStats.entriesSaved;
-      if (standingStats.warnings.length > 0) {
-        stats.warnings.push(...standingStats.warnings);
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      stats.warnings.push(`順位表取得: ${message}`);
-      console.error(`  ❌ 順位表取得: ${message}`);
-
-      if (
-        error instanceof StandingsLiquipediaError &&
-        error.kind === "RATE_LIMIT"
-      ) {
-        console.error(
-          "   🚫 Rate limit (HTTP 429) を検知しました。しばらく時間を置いてから再実行してください。",
+    // 公式順位表の取得・保存（Phase 6-1）。429 停止時は通信しない。
+    if (!stoppedByRateLimit) {
+      try {
+        const standingStats = await fetchAndSaveStandingsForGame(
+          prisma,
+          BASE_URL,
+          API_URL,
+          "league-of-legends",
+          {
+            dryRun: options.dryRun,
+            verbose: options.verbose,
+            force: options.force,
+            debug: options.debug,
+            delayMs: options.delayMs,
+            timeoutMs: options.timeoutMs,
+          },
         );
-        throw error;
+        stats.standingsCreated += standingStats.entriesSaved;
+        if (standingStats.warnings.length > 0) {
+          stats.warnings.push(...standingStats.warnings);
+        }
+        if (isRateLimited()) stoppedByRateLimit = true;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        stats.warnings.push(`順位表取得: ${message}`);
+        console.error(`  ❌ 順位表取得: ${message}`);
+
+        if (
+          error instanceof StandingsLiquipediaError &&
+          error.kind === "RATE_LIMIT"
+        ) {
+          stoppedByRateLimit = true;
+          console.error(
+            "   🚫 以降の全通信を停止し、取得済みデータのみ保存して終了します。",
+          );
+        }
       }
     }
 
@@ -2354,6 +2290,7 @@ async function run() {
     if (stats.teamsFetched === 0) {
       status = "FAILED";
     } else if (
+      stoppedByRateLimit ||
       stats.teamsFailed > 0 ||
       stats.skipped > 0 ||
       stats.warnings.some((warning) => /できませんでした|失敗/.test(warning))
@@ -2415,7 +2352,7 @@ async function run() {
     });
   }
 
-  if (status === "FAILED") {
+  if (status === "FAILED" || stoppedByRateLimit) {
     process.exitCode = 1;
   }
 }

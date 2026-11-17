@@ -114,8 +114,15 @@ npm run update:valo -- --dry-run --verbose
 # 24 時間キャッシュを無視して強制更新
 npm run update:valo -- --force
 
-# 特定チームだけ更新（対象スクリプトによって利用可能）
+# テスト用: 先頭 3 チームだけ取得（画像ダウンロードなし）
+npm run update:lol -- --limit 3
+
+# 特定チームだけ取得（チーム名・短縮名・スラグ・Liquipedia ページ名）
 npm run update:valo -- --team=ZETA_DIVISION
+npm run update:idv -- --team=SCARZ
+
+# 画像（チームロゴ・選手顔写真）も取得する
+npm run update:lol -- --limit 3 --with-images
 ```
 
 | オプション | 説明 |
@@ -125,22 +132,37 @@ npm run update:valo -- --team=ZETA_DIVISION
 | `--force` | 24 時間キャッシュを無視して強制更新 |
 | `--debug` | API レスポンスを `scripts/.cache/` に保存 |
 | `--fixture=<path>` | ネットワーク取得の代わりにローカル HTML / JSON を解析 |
-| `--team=<name>` | 取得対象を 1 チームに絞る |
+| `--team=<name>` | 取得対象を 1 チームに絞る（チーム名 / 短縮名 / スラグ / Liquipedia ページ名） |
+| `--limit=<n>` | 先頭から n チームだけ取得（テスト用） |
+| `--with-images` | チームロゴ・選手顔写真もダウンロードする（既定はスキップ） |
 | `--timeout=<ms>` | 1 リクエストのタイムアウト（既定: 30000ms） |
 | `--delay=<ms>` | リクエスト間隔（Liquipedia 規約により 30000ms 未満は無視） |
+
+> `--team` / `--limit` / `--fixture` を指定した場合は部分更新とみなし、地域一括クリーンアップ（既存レコード削除）を行わずに対象チームだけを Upsert します。全件を取得する通常実行のみ、古いレコードを整理するクリーンアップが走ります。
+
+### 画像ダウンロードの扱い
+
+- **既定（`--with-images` なし）** では、チームロゴ・選手顔写真の新規ダウンロードを行いません。API リクエスト数を抑え、ロスター・移籍履歴・実績・マッチ情報のみを高速に取得します。
+- `public/logos/` / `public/players/` に既に保存済みの画像がある場合は、そのローカルパスをそのまま再利用します。
+- 画像が無い選手は UI 側のデフォルトアバターで安全に表示されます。
+- 画像もまとめて取得したい場合のみ `--with-images` を指定してください（画像 1 枚ごとにも 30 秒の共通ウェイトが入るため、時間がかかります）。
 
 ### Liquipedia API 運用上の注意事項
 
 TEAMTRADE は Liquipedia MediaWiki API を利用しています。以下の運用ルールを守ってください。
 
-1. **リクエスト間の 30 秒ウェイト**
-   - 各スクリプトは連続リクエスト間に **最低 30 秒** の待機を入れています（`LIQUIPEDIA_DELAY_MS` 環境変数で変更可能ですが、30 秒未満にはできません）。
+1. **全通信共通の 30 秒ウェイト**
+   - ロスター API・検索 API・順位表・チームロゴ・選手顔写真など、`liquipedia.net` へのすべての HTTP 通信は `scripts/lib/liquipedia-client.ts` の共通リミッターを通ります。
+   - API か画像かを問わず、**直前のリクエスト完了から最低 30 秒** 経過するまで次のリクエストを送りません（`LIQUIPEDIA_DELAY_MS` で延ばせますが、30 秒未満にはできません）。
+   - 直前のリクエスト時刻は `scripts/.cache/liquipedia-rate-limit.json` に保存されるため、`update:valo` の直後に `update:lol` を実行するなど**別プロセスの連続実行でも 30 秒の間隔を引き継ぎます**。
+   - 総リクエスト数を抑えるため、既定では画像を取得しません（`--with-images` で有効化）。
 2. **24 時間キャッシュ**
    - 同じチーム・同じ種別のページは 24 時間キャッシュします。短時間に同じデータを取り直したい場合は `--force` を付けてください。
 3. **429 Too Many Requests 発生時**
-   - Liquipedia 側のレート制限に引っかかった場合、処理を停止します。**しばらく時間を置いてから再実行してください**。
+   - 429 を検知した時点で**リトライせず即座に以降の全通信を停止**し、取得済みのデータだけを DB に保存して終了します。
+   - 同じ IP で再実行すると制限が長引くため、**数十分以上時間を置いてから** `--limit` を付けて少量ずつ再開してください。
 4. **カスタム User-Agent**
-   - リクエストには `User-Agent` ヘッダー（連絡先先入り）と `Accept-Encoding: gzip` を付与しています。既定値は各タイトル用スクリプト内に定義されており、`LIQUIPEDIA_USER_AGENT` 環境変数で上書きできます。連絡先を含まない場合は実行を停止します。
+   - すべてのリクエストに `User-Agent`（連絡先 URL 入り）と `Accept-Encoding: gzip` を付与しています。既定値は `TeamTradeEsportsDashboard/1.0 (https://github.com/sirius/TeamTrade; contact@example.com)` で、`LIQUIPEDIA_USER_AGENT` 環境変数で上書きできます。連絡先を含まない場合は実行を停止します。
 5. **Cloudflare Turnstile / captcha**
    - 自動回避は行いません。403 / captcha を検出した場合はブラウザで Liquipedia ページを開いてから、時間を置いて再実行してください。
 
@@ -175,6 +197,7 @@ scripts/
   update-standings.ts    # 公式順位表一括更新（npm run update:standings）
   lib/
     roster-parser.ts     # ロスター HTML パーサー（共通）
+    liquipedia-client.ts # Liquipedia 全通信の共通 30 秒リミッター / User-Agent / 429 即停止
     standings-fetcher.ts # 順位表取得ロジック（共通）
 src/
   app/

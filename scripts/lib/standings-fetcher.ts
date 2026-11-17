@@ -7,7 +7,8 @@
  *   - Identity V: IJL
  *
  * Liquipedia 利用規約に従い、リクエスト間は最低 30 秒、24 時間以内の更新はスキップ、
- * 429 検知時は即座に停止する。
+ * 429 検知時は即座に停止する。HTTP 通信は scripts/lib/liquipedia-client.ts の
+ * 共通リミッターに集約している。
  */
 
 import { PrismaClient } from "@prisma/client";
@@ -27,12 +28,15 @@ import {
   canonicalIdvTargetTeamName,
 } from "../../src/lib/idv-teams";
 
-const DEFAULT_USER_AGENT =
-  "TeamTradeStandings/1.0 (local-personal-tool; contact@example.com)";
-const USER_AGENT =
-  process.env.LIQUIPEDIA_USER_AGENT?.trim() || DEFAULT_USER_AGENT;
+import {
+  fetchLiquipediaText,
+  LiquipediaError,
+  MIN_REQUEST_INTERVAL_MS,
+  validateUserAgent,
+} from "./liquipedia-client";
 
-export const MIN_REQUEST_INTERVAL_MS = 30000;
+export { LiquipediaError, MIN_REQUEST_INTERVAL_MS };
+
 const STANDINGS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 type ApiParseResponse = {
@@ -97,30 +101,6 @@ export type StandingsStats = {
   skipped: number;
   warnings: string[];
 };
-
-export class LiquipediaError extends Error {
-  constructor(
-    message: string,
-    readonly kind:
-      | "BLOCKED"
-      | "RATE_LIMIT"
-      | "HTTP"
-      | "NETWORK"
-      | "PARSE"
-      | "MISSING_PAGE",
-  ) {
-    super(message);
-    this.name = "LiquipediaError";
-  }
-}
-
-let lastRequestAt = 0;
-
-function sleep(ms: number) {
-  return new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
 
 export function clean(value: string | undefined | null) {
   return (value ?? "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
@@ -381,19 +361,6 @@ function cellAt(
   return $(cells[index]);
 }
 
-async function waitForRateLimit(options: StandingsOptions, purpose: string) {
-  if (lastRequestAt === 0) return;
-
-  const elapsed = Date.now() - lastRequestAt;
-  const wait = Math.max(0, options.delayMs - elapsed);
-  if (wait > 0) {
-    console.log(
-      `  ⏳ rate limit: ${(wait / 1000).toFixed(1)}s 待機してから ${purpose} を取得します`,
-    );
-    await sleep(wait);
-  }
-}
-
 async function requestApi(
   apiUrl: string,
   page: string,
@@ -404,48 +371,12 @@ async function requestApi(
     page,
   )}&prop=text&redirects=1&format=json`;
 
-  await waitForRateLimit(options, purpose);
-
-  const response = await fetch(url, {
-    redirect: "follow",
-    signal: AbortSignal.timeout(options.timeoutMs),
-    headers: {
-      "User-Agent": USER_AGENT,
-      "Accept-Encoding": "gzip",
-      Accept: "application/json",
-    },
+  const { text: body } = await fetchLiquipediaText(url, {
+    purpose,
+    delayMs: options.delayMs,
+    timeoutMs: options.timeoutMs,
+    accept: "application/json",
   });
-
-  const body = await response.text();
-  lastRequestAt = Date.now();
-
-  if (
-    response.status === 403 ||
-    /verify you are human|challenges\.cloudflare\.com\/turnstile/i.test(body)
-  ) {
-    throw new LiquipediaError(
-      `Liquipedia がアクセスをブロックしました (HTTP ${response.status})。Cloudflare Turnstile を自動回避することはできません。`,
-      "BLOCKED",
-    );
-  }
-
-  if (response.status === 429) {
-    const retryAfter = Number.parseInt(response.headers.get("retry-after") ?? "", 10);
-    const backoff = Number.isFinite(retryAfter)
-      ? Math.max(options.delayMs, retryAfter * 1000)
-      : options.delayMs * 2;
-    throw new LiquipediaError(
-      `Rate limit (HTTP 429)。${Math.ceil(backoff / 1000)} 秒待機して再試行します。`,
-      "RATE_LIMIT",
-    );
-  }
-
-  if (!response.ok) {
-    throw new LiquipediaError(
-      `HTTP ${response.status} ${response.statusText} (${url})`,
-      "HTTP",
-    );
-  }
 
   let json: ApiParseResponse;
   try {
@@ -516,54 +447,27 @@ async function searchStandingPageTitles(
   const seen = new Set<string>();
 
   for (const query of queries) {
-    await waitForRateLimit(options, `「${query}」の大会ページ検索`);
-
     const url = `${apiUrl}?action=query&list=search&srsearch=${encodeURIComponent(
       query,
     )}&srlimit=5&srnamespace=0&format=json`;
 
-    const response = await fetch(url, {
-      redirect: "follow",
-      signal: AbortSignal.timeout(options.timeoutMs),
-      headers: {
-        "User-Agent": USER_AGENT,
-        "Accept-Encoding": "gzip",
-        Accept: "application/json",
-      },
-    });
-
-    const body = await response.text();
-    lastRequestAt = Date.now();
-
-    if (
-      response.status === 403 ||
-      /verify you are human|challenges\.cloudflare\.com\/turnstile/i.test(body)
-    ) {
-      throw new LiquipediaError(
-        `Liquipedia がアクセスをブロックしました (HTTP ${response.status})。Cloudflare Turnstile を自動回避することはできません。`,
-        "BLOCKED",
-      );
-    }
-
-    if (response.status === 429) {
-      const retryAfter = Number.parseInt(
-        response.headers.get("retry-after") ?? "",
-        10,
-      );
-      const backoff = Number.isFinite(retryAfter)
-        ? Math.max(options.delayMs, retryAfter * 1000)
-        : options.delayMs * 2;
-      throw new LiquipediaError(
-        `Rate limit (HTTP 429)。${Math.ceil(backoff / 1000)} 秒待機して再試行します。`,
-        "RATE_LIMIT",
-      );
-    }
-
-    if (!response.ok) {
-      throw new LiquipediaError(
-        `HTTP ${response.status} ${response.statusText} (${url})`,
-        "HTTP",
-      );
+    let body: string;
+    try {
+      const result = await fetchLiquipediaText(url, {
+        purpose: `「${query}」の大会ページ検索`,
+        delayMs: options.delayMs,
+        timeoutMs: options.timeoutMs,
+        accept: "application/json",
+      });
+      body = result.text;
+    } catch (error) {
+      if (
+        error instanceof LiquipediaError &&
+        (error.kind === "RATE_LIMIT" || error.kind === "BLOCKED")
+      ) {
+        throw error;
+      }
+      continue;
     }
 
     let json: ApiSearchResponse;
@@ -924,7 +828,7 @@ export async function fetchAndSaveStandingsForSource(
       if (error instanceof LiquipediaError && error.kind === "RATE_LIMIT") {
         stats.warnings.push(`${pageTitle}: レート制限 (HTTP 429) を検知`);
         console.error(
-          "   🚫 Rate limit (HTTP 429) を検知しました。しばらく時間を置いてから再実行してください。",
+          "   🚫 HTTP 429 を検知しました。リトライせず以降の全通信を停止します。",
         );
         throw error;
       }
@@ -964,11 +868,7 @@ export async function fetchAndSaveStandingsForGame(
     return stats;
   }
 
-  if (!/\([^)]*(?:@|https?:\/\/)[^)]*\)/.test(USER_AGENT)) {
-    throw new Error(
-      "User-Agent に連絡先（メールアドレスまたは URL）を括弧書きで含めてください。例: TeamTradeStandings/1.0 (local-personal-tool; contact@example.com)",
-    );
-  }
+  validateUserAgent();
 
   const updateLog = options.dryRun
     ? null

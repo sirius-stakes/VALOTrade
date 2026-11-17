@@ -15,6 +15,7 @@
 
 import { PrismaClient } from "@prisma/client";
 
+import { isRateLimited } from "./lib/liquipedia-client";
 import {
   fetchAndSaveStandingsForGame,
   MIN_REQUEST_INTERVAL_MS,
@@ -141,10 +142,25 @@ async function run() {
           );
         }
       }
+
+      if (isRateLimited()) {
+        console.error(
+          "  🚫 HTTP 429 を検知したため、以降の全通信を停止し、取得済みデータのみ保存して終了します。",
+        );
+        failed = true;
+        break;
+      }
     } catch (error) {
       failed = true;
       const message = error instanceof Error ? error.message : String(error);
       console.error(`  ❌ ${config.label}: ${message}`);
+
+      if (isRateLimited()) {
+        console.error(
+          "  🚫 HTTP 429 を検知したため、以降の全通信を停止し、取得済みデータのみ保存して終了します。",
+        );
+        break;
+      }
     }
   }
 
