@@ -41,3 +41,11 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# 自動取得データ・ローカルDB（Git管理外）
+prisma/*.db
+prisma/*.db-journal
+public/players/*
+!public/players/.gitkeep
+public/teams/*
+!public/teams/.gitkeep
