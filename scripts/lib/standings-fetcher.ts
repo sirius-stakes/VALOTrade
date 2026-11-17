@@ -480,6 +480,29 @@ async function requestApi(
   };
 }
 
+/** 検索結果を「最新シーズンの大会ページらしい順」に並べるためのスコア。 */
+function scoreStandingTitle(title: string, query: string): {
+  score: number;
+  order: number;
+} {
+  const normalized = title.toLowerCase();
+  const year = new Date().getFullYear();
+  let score = 0;
+
+  if (normalized.includes(String(year))) score += 6;
+  if (normalized.includes(String(year - 1))) score += 3;
+  if (/standings|ranking|regular\s*season|group\s*stage|playoffs?/i.test(title)) {
+    score += 4;
+  }
+  if (/split|stage|season|league|championship|circuit/i.test(title)) {
+    score += 2;
+  }
+  if (normalized.includes(query.toLowerCase())) score += 1;
+  if (/^(talk|user|file|template|category|help):/i.test(title)) score -= 20;
+
+  return { score, order: 0 };
+}
+
 /**
  * MediaWiki 検索 API を使い、大会ページの実在する最新タイトルを複数候補から探す。
  * 推測固定ページ名を順に叩くのを避け、検索結果上位を順位表解析に使う。
@@ -561,7 +584,14 @@ async function searchStandingPageTitles(
       );
     }
 
-    const results = json.query?.search ?? [];
+    const results = (json.query?.search ?? [])
+      .map((result, index) => ({
+        title: result.title,
+        index,
+        ...scoreStandingTitle(result.title, query),
+      }))
+      .sort((a, b) => b.score - a.score || a.index - b.index);
+
     for (const result of results) {
       if (!seen.has(result.title)) {
         seen.add(result.title);
@@ -1000,29 +1030,46 @@ export async function fetchAndSaveStandingsForGame(
   return stats;
 }
 
+const CURRENT_SEASON_YEAR = new Date().getFullYear();
+
 export const STANDINGS_SOURCES: StandingsSource[] = [
   {
     gameSlug: "valorant",
     regionCode: "VCT Pacific (JP)",
     label: "VCT Pacific",
-    searchQueries: ["VCT Pacific Stage", "Pacific League"],
+    searchQueries: [
+      `VCT Pacific ${CURRENT_SEASON_YEAR}`,
+      "VCT Pacific Stage",
+      "Pacific League",
+    ],
   },
   {
     gameSlug: "valorant",
     regionCode: "JP Tier 2 (VCJ)",
     label: "VCJ",
-    searchQueries: ["VALORANT Challengers Japan"],
+    searchQueries: [
+      `VALORANT Challengers Japan ${CURRENT_SEASON_YEAR}`,
+      "VALORANT Challengers Japan",
+    ],
   },
   {
     gameSlug: "league-of-legends",
     regionCode: "LCK",
     label: "LCK",
-    searchQueries: ["LCK 2026", "LCK Season"],
+    searchQueries: [
+      `LCK ${CURRENT_SEASON_YEAR}`,
+      `LCK Season ${CURRENT_SEASON_YEAR}`,
+      "LCK Season",
+    ],
   },
   {
     gameSlug: "identity-v",
     regionCode: "IJL",
     label: "IJL",
-    searchQueries: ["Identity V Japan League"],
+    searchQueries: [
+      `Identity V Japan League ${CURRENT_SEASON_YEAR}`,
+      `IJL ${CURRENT_SEASON_YEAR}`,
+      "Identity V Japan League",
+    ],
   },
 ];

@@ -50,6 +50,12 @@ const USER_AGENT =
 const MIN_REQUEST_INTERVAL_MS = 30000;
 const TEAM_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * 画像 CDN から HTTP 429 を返された時点で true になり、以降の
+ * ロゴ・顔写真ダウンロードを打ち切る。ロスター本体の保存は継続する。
+ */
+let imageDownloadsStopped = false;
+
 const GAME_SLUG = "identity-v";
 const GAME_NAME = "Identity V";
 const GAME_SHORT_NAME = "IDV";
@@ -1131,8 +1137,13 @@ async function shouldSkipTeamUpdate(
 ): Promise<boolean> {
   if (options.force || options.dryRun || options.fixture) return false;
 
+  // 他タイトル（VALORANT 等）に同じ shortName のチームが存在しても
+  // 誤ってスキップしないよう、必ず同一ゲーム内で判定する。
   const existing = await prisma.team.findFirst({
-    where: { shortName: team.shortName },
+    where: {
+      shortName: team.shortName,
+      game: { slug: GAME_SLUG },
+    },
     select: { updatedAt: true },
   });
 
@@ -1296,13 +1307,54 @@ async function requestApi(
  * ページが存在しない場合に、MediaWiki 検索 API で実在するチームページタイトルを探す。
  * 表記揺れ（Arneb_with_WoG / Crest_Gaming_Lst 等）への対応。
  */
-async function searchTeamPageTitle(
+function normalizeSearchKey(value: string): string {
+  return clean(value)
+    .toLowerCase()
+    .replace(/[_\s]+/g, " ")
+    .replace(/[^a-z0-9 ]/g, "")
+    .trim();
+}
+
+/**
+ * 検索結果が対象チームのページらしいかをスコアリングする。
+ * 同名の大会ページや過去シーズンページより、チーム名そのものを優先する。
+ */
+function scoreTeamSearchResult(
+  title: string,
+  team: IdvTeamDefinition,
+): number {
+  const normalizedTitle = normalizeSearchKey(title);
+  const candidates = [team.name, team.shortName, ...team.aliases].map(
+    normalizeSearchKey,
+  );
+
+  let score = 0;
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    if (normalizedTitle === candidate) score = Math.max(score, 10);
+    else if (normalizedTitle.includes(candidate)) score = Math.max(score, 6);
+    else if (candidate.includes(normalizedTitle)) score = Math.max(score, 4);
+  }
+
+  if (/tournament|league|season|matches|statistics|results/i.test(title)) {
+    score -= 3;
+  }
+  return score;
+}
+
+/**
+ * ページが存在しない場合に、MediaWiki 検索 API で実在するチームページタイトルを探す。
+ * 表記揺れ（Arneb_with_WoG / Crest_Gaming_Lst 等）への対応。
+ */
+async function searchTeamPageTitles(
   team: IdvTeamDefinition,
   options: CliOptions,
-): Promise<string | null> {
+): Promise<string[]> {
   const queries = [
     ...new Set([team.name, team.shortName, ...team.aliases]),
   ];
+  const titles: string[] = [];
+  const seen = new Set<string>();
 
   for (const query of queries) {
     await waitForRateLimit(options, `「${query}」のチームページ検索`);
@@ -1363,13 +1415,26 @@ async function searchTeamPageTitle(
       continue;
     }
 
-    const result = json.query?.search?.[0];
-    if (result?.title) {
-      return result.title;
+    const results = (json.query?.search ?? [])
+      .map((result, index) => ({
+        title: result.title,
+        index,
+        score: scoreTeamSearchResult(result.title, team),
+      }))
+      .filter((result) => result.score > 0)
+      .sort((a, b) => b.score - a.score || a.index - b.index);
+
+    for (const result of results) {
+      if (!seen.has(result.title)) {
+        seen.add(result.title);
+        titles.push(result.title);
+      }
     }
+
+    if (titles.length > 0) break;
   }
 
-  return null;
+  return titles;
 }
 
 async function saveDebugBody(
@@ -1394,6 +1459,8 @@ async function downloadTeamLogo(
   options: CliOptions,
   stats: ApplyStats,
 ): Promise<string | null> {
+  if (imageDownloadsStopped) return null;
+
   try {
     await mkdir(LOGO_DIR, { recursive: true });
     await waitForRateLimit(options, `${team.name} のロゴ画像`);
@@ -1408,6 +1475,15 @@ async function downloadTeamLogo(
       },
     });
     lastRequestAt = Date.now();
+
+    if (response.status === 429) {
+      imageDownloadsStopped = true;
+      const message =
+        "画像取得で HTTP 429 Too Many Requests を検知したため、以降の画像ダウンロードを停止します（取得済みデータは保存します）";
+      stats.warnings.push(`${team.name}: ${message}`);
+      console.warn(`  ⚠️  ${team.name}: ${message}`);
+      return null;
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status} ${response.statusText}`);
@@ -1437,7 +1513,7 @@ async function downloadPlayerAvatar(
   options: CliOptions,
   stats: ApplyStats,
 ): Promise<string | null> {
-  if (!sourceUrl) return null;
+  if (!sourceUrl || imageDownloadsStopped) return null;
 
   try {
     await mkdir(PLAYER_AVATAR_DIR, { recursive: true });
@@ -1455,19 +1531,12 @@ async function downloadPlayerAvatar(
     lastRequestAt = Date.now();
 
     if (response.status === 429) {
-      const retryAfter = Number.parseInt(
-        response.headers.get("retry-after") ?? "",
-        10,
-      );
-      const backoff = Number.isFinite(retryAfter)
-        ? Math.max(options.delayMs, retryAfter * 1000)
-        : options.delayMs * 2;
-      throw new LiquipediaError(
-        `顔写真取得で Rate limit (HTTP 429)。${Math.ceil(
-          backoff / 1000,
-        )} 秒待機して再試行してください。`,
-        "RATE_LIMIT",
-      );
+      imageDownloadsStopped = true;
+      const message =
+        "顔写真取得で HTTP 429 Too Many Requests を検知したため、以降の画像ダウンロードを停止します（取得済みデータは保存します）";
+      stats.warnings.push(`${handle}: ${message}`);
+      console.warn(`  ⚠️  ${handle}: ${message}`);
+      return null;
     }
 
     if (!response.ok) {
@@ -2134,9 +2203,9 @@ async function fetchTeam(
 ): Promise<TeamRoster> {
   let pageTitle = team.liquipediaPage;
   let pageUrl = `${PAGE_BASE_URL}/${pageTitle}`;
-  let title: string;
-  let html: string;
-  let rawBody: string;
+  let title = team.name;
+  let html = "";
+  let rawBody = "";
 
   try {
     const result = await requestApi(
@@ -2155,24 +2224,61 @@ async function fetchTeam(
       console.warn(
         `  ⚠️  ページ ${team.liquipediaPage} が見つからないため検索フォールバックを試行します。`,
       );
-      const found = await searchTeamPageTitle(team, options);
-      if (!found) {
+      const candidates = await searchTeamPageTitles(team, options);
+      if (candidates.length === 0) {
         throw new LiquipediaError(
           `チームページが見つかりません: ${team.liquipediaPage}`,
           "MISSING_PAGE",
         );
       }
-      console.log(`  🔍 検索でページを発見: ${found}`);
-      pageTitle = found;
-      pageUrl = `${PAGE_BASE_URL}/${pageTitle}`;
-      const result = await requestApi(
-        pageTitle,
-        options,
-        `${team.name} のロスター`,
-      );
-      title = result.title;
-      html = result.html;
-      rawBody = result.rawBody;
+
+      let loaded = false;
+      for (const candidate of candidates) {
+        try {
+          const result = await requestApi(
+            candidate,
+            options,
+            `${team.name} のロスター`,
+          );
+          const parsedCandidate = parseTeamRosterHtml(result.html);
+          if (parsedCandidate.entries.length === 0) {
+            console.warn(
+              `  ⚠️  検索候補 ${candidate} はロスターを検出できなかったため次を試します。`,
+            );
+            continue;
+          }
+
+          console.log(`  🔍 検索でページを発見: ${candidate}`);
+          pageTitle = candidate;
+          pageUrl = `${PAGE_BASE_URL}/${pageTitle}`;
+          title = result.title;
+          html = result.html;
+          rawBody = result.rawBody;
+          loaded = true;
+          break;
+        } catch (candidateError) {
+          if (
+            candidateError instanceof LiquipediaError &&
+            candidateError.kind === "RATE_LIMIT"
+          ) {
+            throw candidateError;
+          }
+          console.warn(
+            `  ⚠️  検索候補 ${candidate} の取得に失敗: ${
+              candidateError instanceof Error
+                ? candidateError.message
+                : String(candidateError)
+            }`,
+          );
+        }
+      }
+
+      if (!loaded) {
+        throw new LiquipediaError(
+          `検索候補からチームページを取得できませんでした: ${candidates.join(", ")}`,
+          "MISSING_PAGE",
+        );
+      }
     } else {
       throw error;
     }

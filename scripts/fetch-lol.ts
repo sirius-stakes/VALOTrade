@@ -50,6 +50,12 @@ const USER_AGENT =
 const MIN_REQUEST_INTERVAL_MS = 30000;
 const TEAM_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * 画像 CDN から HTTP 429 を返された時点で true になり、以降の
+ * ロゴ・顔写真ダウンロードを打ち切る。ロスター本体の保存は継続する。
+ */
+let imageDownloadsStopped = false;
+
 const GAME_SLUG = "league-of-legends";
 const GAME_NAME = "League of Legends";
 const GAME_SHORT_NAME = "LoL";
@@ -1122,8 +1128,13 @@ async function shouldSkipTeamUpdate(
 ): Promise<boolean> {
   if (options.force || options.dryRun || options.fixture) return false;
 
+  // 他タイトル（VALORANT 等）に同じ shortName のチームが存在しても
+  // 誤ってスキップしないよう、必ず同一ゲーム内で判定する。
   const existing = await prisma.team.findFirst({
-    where: { shortName: team.shortName },
+    where: {
+      shortName: team.shortName,
+      game: { slug: GAME_SLUG },
+    },
     select: { updatedAt: true },
   });
 
@@ -1167,7 +1178,7 @@ async function requestApi(
 ): Promise<{ title: string; html: string; rawBody: string }> {
   const url = `${API_URL}?action=parse&page=${encodeURIComponent(
     page,
-  )}&prop=text&format=json`;
+  )}&prop=text&redirects=1&format=json`;
   const maxAttempts = 2;
   let lastError: unknown = null;
 
@@ -1305,6 +1316,8 @@ async function downloadTeamLogo(
   options: CliOptions,
   stats: ApplyStats,
 ): Promise<string | null> {
+  if (imageDownloadsStopped) return null;
+
   try {
     await mkdir(LOGO_DIR, { recursive: true });
     await waitForRateLimit(options, `${team.name} のロゴ画像`);
@@ -1319,6 +1332,15 @@ async function downloadTeamLogo(
       },
     });
     lastRequestAt = Date.now();
+
+    if (response.status === 429) {
+      imageDownloadsStopped = true;
+      const message =
+        "画像取得で HTTP 429 Too Many Requests を検知したため、以降の画像ダウンロードを停止します（取得済みデータは保存します）";
+      stats.warnings.push(`${team.name}: ${message}`);
+      console.warn(`  ⚠️  ${team.name}: ${message}`);
+      return null;
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status} ${response.statusText}`);
@@ -1348,7 +1370,7 @@ async function downloadPlayerAvatar(
   options: CliOptions,
   stats: ApplyStats,
 ): Promise<string | null> {
-  if (!sourceUrl) return null;
+  if (!sourceUrl || imageDownloadsStopped) return null;
 
   try {
     await mkdir(PLAYER_AVATAR_DIR, { recursive: true });
@@ -1366,19 +1388,12 @@ async function downloadPlayerAvatar(
     lastRequestAt = Date.now();
 
     if (response.status === 429) {
-      const retryAfter = Number.parseInt(
-        response.headers.get("retry-after") ?? "",
-        10,
-      );
-      const backoff = Number.isFinite(retryAfter)
-        ? Math.max(options.delayMs, retryAfter * 1000)
-        : options.delayMs * 2;
-      throw new LiquipediaError(
-        `顔写真取得で Rate limit (HTTP 429)。${Math.ceil(
-          backoff / 1000,
-        )} 秒待機して再試行してください。`,
-        "RATE_LIMIT",
-      );
+      imageDownloadsStopped = true;
+      const message =
+        "顔写真取得で HTTP 429 Too Many Requests を検知したため、以降の画像ダウンロードを停止します（取得済みデータは保存します）";
+      stats.warnings.push(`${handle}: ${message}`);
+      console.warn(`  ⚠️  ${handle}: ${message}`);
+      return null;
     }
 
     if (!response.ok) {

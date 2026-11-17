@@ -262,6 +262,80 @@ function resolveCurrentStandingsByRegion(
   });
 }
 
+/**
+ * 地域コードの表記ゆれ吸収用エイリアス。
+ * DB に `LCK` / `Korea` / `KR`、`IJL` / `Japan` / `JP` が混在していても
+ * 同じ地域として扱う。
+ */
+const GAME_REGION_ALIASES: Record<string, readonly string[]> = {
+  "league-of-legends": ["lck", "kr", "korea", "korean"],
+  "identity-v": ["ijl", "jp", "japan", "japanese"],
+};
+
+/** Game.slug の表記ゆれ吸収用エイリアス。 */
+const GAME_SLUG_ALIASES: Record<string, readonly string[]> = {
+  valorant: ["valorant", "valo"],
+  "league-of-legends": [
+    "leagueoflegends",
+    "league of legends",
+    "lol",
+  ],
+  "identity-v": [
+    "identityv",
+    "identity v",
+    "idv",
+    "fifth personality",
+  ],
+};
+
+function normalizeKey(value: string | null | undefined) {
+  return (value ?? "").toLowerCase().replace(/[\s_-]+/g, "");
+}
+
+/** 指定ゲームの対象地域（LCK / IJL など）に属するか。 */
+function isGameRegion(
+  gameSlug: string,
+  regionCode: string | null | undefined,
+) {
+  const aliases = GAME_REGION_ALIASES[gameSlug];
+  if (!aliases) return false;
+  const normalized = normalizeKey(regionCode);
+  if (!normalized) return false;
+  return aliases.some((alias) => normalizeKey(alias) === normalized);
+}
+
+/**
+ * `gameSlug` から実際の Game.id を解決する。
+ * 完全一致しない場合は大文字小文字・区切り文字・別名（LoL / IdentityV 等）を
+ * 正規化して照合し、既存 DB の表記ゆれを吸収する。
+ */
+async function resolveGameId(gameSlug: string): Promise<string | null> {
+  const exact = await prisma.game.findUnique({
+    where: { slug: gameSlug },
+    select: { id: true },
+  });
+  if (exact) return exact.id;
+
+  const games = await prisma.game.findMany({
+    select: { id: true, slug: true },
+  });
+  const normalized = normalizeKey(gameSlug);
+  const aliases = GAME_SLUG_ALIASES[gameSlug] ?? [];
+
+  const found = games.find((game) => {
+    const candidate = normalizeKey(game.slug);
+    if (!candidate) return false;
+    return (
+      candidate === normalized ||
+      aliases.some((alias) => normalizeKey(alias) === candidate) ||
+      candidate.includes(normalized) ||
+      normalized.includes(candidate)
+    );
+  });
+
+  return found?.id ?? null;
+}
+
 function isTargetRelatedPlayer(
   player: PlayerWithMemberships,
   gameSlug: string,
@@ -274,15 +348,20 @@ function isTargetRelatedPlayer(
         : isTargetTeamName;
   return player.memberships.some(
     (membership) =>
-      isTarget(membership.team.name) || isTarget(membership.team.shortName),
+      isTarget(membership.team.name) ||
+      isTarget(membership.team.shortName) ||
+      isGameRegion(gameSlug, membership.team.region.code),
   );
 }
 
 export async function getDashboardData(
   gameSlug: string,
 ): Promise<DashboardData | null> {
+  const gameId = await resolveGameId(gameSlug);
+  if (!gameId) return null;
+
   const game = await prisma.game.findUnique({
-    where: { slug: gameSlug },
+    where: { id: gameId },
     include: {
       players: {
         include: {
@@ -342,6 +421,8 @@ export async function getDashboardData(
 
   if (!game) return null;
 
+  const resolvedGameSlug = game.slug;
+
   const targetTransferEvents = game.transferEvents.filter(
     (event) =>
       isTargetTeamName(event.fromTeamName) ||
@@ -356,7 +437,7 @@ export async function getDashboardData(
   const playerMap = new Map<string, PlayerDto>();
   for (const player of game.players) {
     if (
-      !isTargetRelatedPlayer(player, gameSlug) &&
+      !isTargetRelatedPlayer(player, resolvedGameSlug) &&
       !targetEventPlayerIds.has(player.id)
     ) {
       continue;
@@ -370,14 +451,19 @@ export async function getDashboardData(
   }
 
   const isTarget =
-    gameSlug === "league-of-legends"
+    resolvedGameSlug === "league-of-legends"
       ? isLolTargetTeamName
-      : gameSlug === "identity-v"
+      : resolvedGameSlug === "identity-v"
         ? isIdvTargetTeamName
         : isTargetTeamName;
 
+  // チーム名の表記ゆれに加え、LCK / IJL 地域に保存されているチームは
+  // 名前が既知の一覧と一致しなくても一覧表示の対象にする。
   const targetTeams = game.teams.filter(
-    (team) => isTarget(team.name) || isTarget(team.shortName),
+    (team) =>
+      isTarget(team.name) ||
+      isTarget(team.shortName) ||
+      isGameRegion(resolvedGameSlug, team.region.code),
   );
 
   const standings = await prisma.standing.findMany({
