@@ -32,6 +32,9 @@ yarn-error.log*
 .pnpm-debug.log*
 /scripts/.cache/
 
+# Liquipedia API ç”Ÿãƒ‡ãƒ¼ã‚¿ã®ãƒ­ãƒ¼ã‚«ãƒ«ã‚­ãƒ£ãƒƒã‚·ãƒ¥ï¼ˆè‡ªå‹•ç”Ÿæˆç‰©ãƒ»ã‚ªãƒ•ãƒ©ã‚¤ãƒ³å†ãƒ‘ãƒ¼ã‚¹ç”¨ï¼‰
+/data/liquipedia-cache/
+
 # env files
 .env
 .env*.local
@@ -42,7 +45,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 
-# ©“®æ“¾ƒf[ƒ^Eƒ[ƒJƒ‹DBiGitŠÇ—ŠOj
+# ï¿½ï¿½ï¿½ï¿½ï¿½æ“¾ï¿½fï¿½[ï¿½^ï¿½Eï¿½ï¿½ï¿½[ï¿½Jï¿½ï¿½DBï¿½iGitï¿½Ç—ï¿½ï¿½Oï¿½j
 prisma/*.db
 prisma/*.db-journal
 public/players/*

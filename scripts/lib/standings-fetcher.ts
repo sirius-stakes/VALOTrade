@@ -29,7 +29,10 @@ import {
 } from "../../src/lib/idv-teams";
 
 import {
-  fetchLiquipediaText,
+  fetchLiquipediaTextWithCache,
+  hasLiquipediaCache,
+} from "./liquipedia-cache";
+import {
   LiquipediaError,
   MIN_REQUEST_INTERVAL_MS,
   validateUserAgent,
@@ -79,6 +82,8 @@ export type StandingsOptions = {
   dryRun: boolean;
   verbose: boolean;
   force: boolean;
+  /** ローカルキャッシュのみを使い、外部通信を一切行わない。 */
+  offline?: boolean;
   debug?: boolean;
   delayMs: number;
   timeoutMs: number;
@@ -363,6 +368,7 @@ function cellAt(
 
 async function requestApi(
   apiUrl: string,
+  gameSlug: string,
   page: string,
   options: StandingsOptions,
   purpose: string,
@@ -371,11 +377,16 @@ async function requestApi(
     page,
   )}&prop=text&redirects=1&format=json`;
 
-  const { text: body } = await fetchLiquipediaText(url, {
+  const { text: body } = await fetchLiquipediaTextWithCache({
+    game: gameSlug,
+    kind: "parse",
+    page,
     purpose,
+    url,
+    force: options.force,
+    offline: Boolean(options.offline),
     delayMs: options.delayMs,
     timeoutMs: options.timeoutMs,
-    accept: "application/json",
   });
 
   let json: ApiParseResponse;
@@ -440,6 +451,7 @@ function scoreStandingTitle(title: string, query: string): {
  */
 async function searchStandingPageTitles(
   apiUrl: string,
+  gameSlug: string,
   queries: string[],
   options: StandingsOptions,
 ): Promise<string[]> {
@@ -453,11 +465,16 @@ async function searchStandingPageTitles(
 
     let body: string;
     try {
-      const result = await fetchLiquipediaText(url, {
+      const result = await fetchLiquipediaTextWithCache({
+        game: gameSlug,
+        kind: "search",
+        page: query,
         purpose: `「${query}」の大会ページ検索`,
+        url,
+        force: options.force,
+        offline: Boolean(options.offline),
         delayMs: options.delayMs,
         timeoutMs: options.timeoutMs,
-        accept: "application/json",
       });
       body = result.text;
     } catch (error) {
@@ -732,14 +749,26 @@ export async function fetchAndSaveStandingsForSource(
   };
 
   if (!options.force && !options.dryRun) {
-    const latest = await prisma.standing.findFirst({
-      where: {
-        game: { slug: source.gameSlug },
-        region: { code: source.regionCode },
-      },
-      orderBy: { updatedAt: "desc" },
-      select: { updatedAt: true },
-    });
+    // ローカルキャッシュが存在する場合は 24 時間 TTL を無視し、
+    // 通信せずキャッシュから即座に再パース・DB 保存する。
+    let hasAnyCache = false;
+    for (const query of source.searchQueries) {
+      if (await hasLiquipediaCache(source.gameSlug, "search", query)) {
+        hasAnyCache = true;
+        break;
+      }
+    }
+
+    const latest = hasAnyCache
+      ? null
+      : await prisma.standing.findFirst({
+          where: {
+            game: { slug: source.gameSlug },
+            region: { code: source.regionCode },
+          },
+          orderBy: { updatedAt: "desc" },
+          select: { updatedAt: true },
+        });
     if (
       latest &&
       Date.now() - latest.updatedAt.getTime() < STANDINGS_CACHE_TTL_MS
@@ -754,6 +783,7 @@ export async function fetchAndSaveStandingsForSource(
 
   const pageTitles = await searchStandingPageTitles(
     apiUrl,
+    source.gameSlug,
     source.searchQueries,
     options,
   );
@@ -777,6 +807,7 @@ export async function fetchAndSaveStandingsForSource(
     try {
       const { title, html } = await requestApi(
         apiUrl,
+        source.gameSlug,
         pageTitle,
         options,
         `${source.label} 順位表`,
@@ -823,6 +854,12 @@ export async function fetchAndSaveStandingsForSource(
     } catch (error) {
       if (error instanceof LiquipediaError && error.kind === "MISSING_PAGE") {
         stats.warnings.push(`${pageTitle}: ページが見つかりません`);
+        continue;
+      }
+      if (error instanceof LiquipediaError && error.kind === "CACHE_MISS") {
+        stats.warnings.push(
+          `${pageTitle}: ローカルキャッシュが無いためスキップ（--offline）`,
+        );
         continue;
       }
       if (error instanceof LiquipediaError && error.kind === "RATE_LIMIT") {

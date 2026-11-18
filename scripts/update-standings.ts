@@ -5,10 +5,14 @@
  *   npm run update:standings                  # 全タイトル取得
  *   npm run update:standings -- --game=valorant  # VALORANT のみ
  *   npm run update:standings -- --dry-run     # 取得・解析のみ
- *   npm run update:standings -- --force       # 24 時間キャッシュを無視
+ *   npm run update:standings -- --force       # キャッシュ・24 時間 TTL を無視して再取得
+ *   npm run update:standings -- --offline     # ローカルキャッシュのみで再パース（通信なし）
+ *
+ * API レスポンスは data/liquipedia-cache/ にローカル保存される。
+ * 既定実行ではキャッシュがあれば外部通信せず、30 秒待機もスキップして再パースする。
  *
  * Liquipedia の利用規約に合わせ、以下を必ず守る:
- *   - 独自の User-Agent（連絡先先入り）と Accept-Encoding: gzip
+ *   - 独自の User-Agent（連絡先先入り）・Accept・Accept-Encoding
  *   - リクエスト間は最低 30 秒
  *   - 429 検知時は即座停止
  */
@@ -81,6 +85,7 @@ function parseArgs(argv: string[]): CliOptions {
     dryRun: hasFlag("dry-run"),
     verbose: hasFlag("verbose"),
     force: hasFlag("force"),
+    offline: hasFlag("offline"),
     debug: hasFlag("debug"),
     timeoutMs:
       Number.parseInt(getOption("timeout") ?? "30000", 10) || 30000,
@@ -103,6 +108,15 @@ async function run() {
   );
   console.log(
     ` rate limit : ${options.delayMs}ms (Liquipedia 規約に合わせ最低 ${MIN_REQUEST_INTERVAL_MS}ms)`,
+  );
+  console.log(
+    ` cache      : ${
+      options.force
+        ? "FORCE (キャッシュを無視して再取得)"
+        : options.offline
+          ? "OFFLINE (ローカルキャッシュのみ)"
+          : "CACHE FIRST (キャッシュがあれば通信なし)"
+    }`,
   );
   console.log("──────────────────────────────────────────────");
 

@@ -6,13 +6,17 @@
  *   npm run update:lol                  # API から LCK チームを取得して DB 更新（画像なし）
  *   npm run update:lol -- --dry-run     # 取得・解析のみ（DB 更新なし）
  *   npm run update:lol -- --verbose     # 取得した全選手を表示
- *   npm run update:lol -- --force       # 24時間キャッシュを無視して強制更新
+ *   npm run update:lol -- --force       # キャッシュ・24時間 TTL を無視して強制再取得
+ *   npm run update:lol -- --offline     # ローカルキャッシュのみで再パース（通信なし）
  *   npm run update:lol -- --limit 3     # 先頭3チームのみ取得（テスト用）
  *   npm run update:lol -- --team=T1     # 特定チームのみ取得
  *   npm run update:lol -- --with-images # チームロゴ・選手顔写真も取得
  *
+ * API レスポンスは data/liquipedia-cache/ にローカル保存される。
+ * 既定実行ではキャッシュがあれば外部通信せず、30 秒待機もスキップして再パースする。
+ *
  * Liquipedia の利用規約に合わせ、以下を必ず守る:
- *  - 独自の User-Agent（連絡先先入り）と Accept-Encoding: gzip を付与する
+ *  - 独自の User-Agent（連絡先先入り）・Accept・Accept-Encoding を付与する
  *  - API・検索・順位表・画像を含む全通信で 30 秒以上の間隔をあける
  *    （scripts/lib/liquipedia-client.ts の共通リミッターを必ず経由する）
  *  - 429 を検知したらリトライせず、以降の全通信を停止して取得済みデータのみ保存する
@@ -35,8 +39,12 @@ import { getCountryMeta } from "../src/lib/nationality";
 import { getRosterCategory, isRosterRole } from "../src/lib/roles";
 import { LCK_TEAMS, type LolTeamDefinition } from "../src/lib/lol-teams";
 import {
+  fetchLiquipediaTextWithCache,
+  hasLiquipediaCache,
+} from "./lib/liquipedia-cache";
+import {
   fetchLiquipediaBinary,
-  fetchLiquipediaText,
+  IMAGE_ACCEPT,
   isRateLimited,
   LiquipediaError,
   MIN_REQUEST_INTERVAL_MS,
@@ -75,6 +83,8 @@ type CliOptions = {
   verbose: boolean;
   debug: boolean;
   force: boolean;
+  /** ローカルキャッシュのみを使い、外部通信を一切行わない。 */
+  offline: boolean;
   /** 顔写真・新規ロゴもダウンロードする（既定はスキップ）。 */
   withImages: boolean;
   /** 取得するチーム数の上限（テスト用）。 */
@@ -230,6 +240,7 @@ function parseArgs(argv: string[]): CliOptions {
     verbose: hasFlag("verbose"),
     debug: hasFlag("debug"),
     force: hasFlag("force"),
+    offline: hasFlag("offline"),
     withImages: hasFlag("with-images"),
     limit,
     fixture: getOption("fixture"),
@@ -1144,6 +1155,14 @@ async function shouldSkipTeamUpdate(
 ): Promise<boolean> {
   if (options.force || options.dryRun || options.fixture) return false;
 
+  // ローカルキャッシュがある場合は 24 時間 TTL を無視し、
+  // 通信せずキャッシュから即座に再パース・DB 保存する（オフライン再構築対応）。
+  if (
+    await hasLiquipediaCache(GAME_SLUG, "parse", team.liquipediaPage)
+  ) {
+    return false;
+  }
+
   // 他タイトル（VALORANT 等）に同じ shortName のチームが存在しても
   // 誤ってスキップしないよう、必ず同一ゲーム内で判定する。
   const existing = await prisma.team.findFirst({
@@ -1173,12 +1192,18 @@ async function requestApi(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      // 30 秒リミッター・User-Agent・429 即停止は共通クライアント側で担保する。
-      const { text: body } = await fetchLiquipediaText(url, {
+      // キャッシュ優先取得。通信時は共通リミッターが 30 秒間隔・
+      // User-Agent・Accept・429 即停止を担保する。
+      const { text: body } = await fetchLiquipediaTextWithCache({
+        game: GAME_SLUG,
+        kind: "parse",
+        page,
         purpose,
+        url,
+        force: options.force,
+        offline: options.offline,
         delayMs: options.delayMs,
         timeoutMs: options.timeoutMs,
-        accept: "application/json",
       });
 
       let json: ApiParseResponse;
@@ -1271,6 +1296,15 @@ async function downloadTeamLogo(
 
   if (!options.withImages || !sourceUrl) return null;
 
+  if (options.offline) {
+    if (options.verbose) {
+      console.log(
+        `  📭 [OFFLINE] ${team.name} のロゴ画像ダウンロードをスキップします`,
+      );
+    }
+    return null;
+  }
+
   try {
     await mkdir(LOGO_DIR, { recursive: true });
 
@@ -1278,7 +1312,7 @@ async function downloadTeamLogo(
       purpose: `${team.name} のロゴ画像`,
       delayMs: options.delayMs,
       timeoutMs: options.timeoutMs,
-      accept: "image/*",
+      accept: IMAGE_ACCEPT,
     });
 
     const fileName = `${team.logoSlug}.png`;
@@ -1313,6 +1347,15 @@ async function downloadPlayerAvatar(
 
   if (!sourceUrl || !options.withImages) return null;
 
+  if (options.offline) {
+    if (options.verbose) {
+      console.log(
+        `  📭 [OFFLINE] ${handle} の顔写真ダウンロードをスキップします`,
+      );
+    }
+    return null;
+  }
+
   try {
     await mkdir(PLAYER_AVATAR_DIR, { recursive: true });
 
@@ -1320,7 +1363,7 @@ async function downloadPlayerAvatar(
       purpose: `${handle} の顔写真`,
       delayMs: options.delayMs,
       timeoutMs: options.timeoutMs,
-      accept: "image/*",
+      accept: IMAGE_ACCEPT,
     });
 
     const fileName = `${handle.replace(/[^a-zA-Z0-9_-]/g, "_")}.png`;
@@ -2085,6 +2128,15 @@ async function run() {
   console.log(
     ` rate limit : ${options.delayMs}ms (Liquipedia 規約に合わせ最低 ${MIN_REQUEST_INTERVAL_MS}ms)`,
   );
+  console.log(
+    ` cache      : ${
+      options.force
+        ? "FORCE (キャッシュを無視して再取得)"
+        : options.offline
+          ? "OFFLINE (ローカルキャッシュのみ)"
+          : "CACHE FIRST (キャッシュがあれば通信なし)"
+    }`,
+  );
   console.log(` target     : ${teams.map((team) => team.shortName).join(" / ")}`);
   console.log(` region     : ${REGION_CODE}`);
   console.log(
@@ -2240,6 +2292,13 @@ async function run() {
           console.warn(
             `   ⚠️  Liquipedia ページが見つからないためスキップ: ${team.liquipediaPage}`,
           );
+        } else if (
+          error instanceof LiquipediaError &&
+          error.kind === "CACHE_MISS"
+        ) {
+          console.warn(
+            `   📭 [CACHE MISS] ローカルキャッシュが無いためスキップ: ${team.liquipediaPage}`,
+          );
         }
       }
     }
@@ -2256,6 +2315,7 @@ async function run() {
             dryRun: options.dryRun,
             verbose: options.verbose,
             force: options.force,
+            offline: options.offline,
             debug: options.debug,
             delayMs: options.delayMs,
             timeoutMs: options.timeoutMs,

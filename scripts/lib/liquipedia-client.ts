@@ -4,9 +4,12 @@
  *
  * 運用ルール:
  *  - API か画像かを問わず、直前のリクエスト完了から必ず 30000ms 以上あける
- *  - `User-Agent`（連絡先入り）と `Accept-Encoding: gzip` を必ず付与する
+ *  - `User-Agent`（連絡先入り）・`Accept`・`Accept-Encoding: gzip, deflate, br`
+ *    を必ず付与する（ヘッダーは呼び出し側で上書きできない）
  *  - `429 Too Many Requests` を検知したらリトライせず、プロセス内の
  *    以降の全通信を即座に停止する（取得済みデータの保存は呼び出し側で継続）
+ *  - 429 と 403 / 406 などの HTTP エラーはログで混同しない
+ *    （実際の response.status / statusText を必ず表示する）
  *
  * 各取得スクリプトは必ずこのモジュール経由で `liquipedia.net` へアクセスすること。
  */
@@ -19,7 +22,13 @@ export const MIN_REQUEST_INTERVAL_MS = 30000;
 
 /** 連絡先・プロジェクト URL を含む固有の User-Agent。 */
 const DEFAULT_USER_AGENT =
-  "TeamTradeEsportsDashboard/1.0 (https://github.com/sirius/TeamTrade; contact@example.com)";
+  "TeamTrade/1.0 (https://github.com/sirius/TeamTrade; contact@teamtrade.local)";
+
+/** テキスト（JSON / HTML）取得時の Accept ヘッダー。 */
+const DEFAULT_ACCEPT = "application/json, text/plain, */*";
+
+/** 画像取得時の Accept ヘッダー。 */
+export const IMAGE_ACCEPT = "image/*, */*";
 
 export type LiquipediaErrorKind =
   | "BLOCKED"
@@ -27,7 +36,8 @@ export type LiquipediaErrorKind =
   | "HTTP"
   | "NETWORK"
   | "PARSE"
-  | "MISSING_PAGE";
+  | "MISSING_PAGE"
+  | "CACHE_MISS";
 
 export class LiquipediaError extends Error {
   constructor(
@@ -45,7 +55,7 @@ export type LiquipediaRequestOptions = {
   /** リクエスト間隔。30000ms 未満は無視される。 */
   delayMs?: number;
   timeoutMs?: number;
-  /** Accept ヘッダー。画像取得時は "image/*" を指定する。 */
+  /** Accept ヘッダー。画像取得時は IMAGE_ACCEPT を指定する。 */
   accept?: string;
 };
 
@@ -121,7 +131,7 @@ export function resolveUserAgent() {
 export function validateUserAgent(userAgent = resolveUserAgent()) {
   if (!/\([^)]*(?:@|https?:\/\/)[^)]*\)/.test(userAgent)) {
     throw new Error(
-      "User-Agent に連絡先（メールアドレスまたは URL）を括弧書きで含めてください。例: TeamTradeEsportsDashboard/1.0 (https://github.com/sirius/TeamTrade; contact@example.com)",
+      "User-Agent に連絡先（メールアドレスまたは URL）を括弧書きで含めてください。例: TeamTrade/1.0 (https://github.com/sirius/TeamTrade; contact@teamtrade.local)",
     );
   }
 }
@@ -179,10 +189,10 @@ function ensureNotRateLimited(purpose: string) {
   );
 }
 
-function throwRateLimit(purpose: string): never {
+function throwRateLimit(response: Response, purpose: string): never {
   markRateLimited();
   throw new LiquipediaError(
-    `HTTP 429 Too Many Requests を検知しました（${purpose}）。リトライせず以降の全通信を停止します。取得済みデータは保存されます。`,
+    `HTTP ${response.status} ${response.statusText || "Too Many Requests"} を検知しました（${purpose}）。リトライせず以降の全通信を停止します。取得済みデータは保存されます。`,
     "RATE_LIMIT",
   );
 }
@@ -203,8 +213,8 @@ async function beginRequest(
       headers: {
         // ヘッダーは呼び出し側で上書きできないよう、ここで強制する。
         "User-Agent": resolveUserAgent(),
-        "Accept-Encoding": "gzip",
-        Accept: options.accept ?? "*/*",
+        "Accept-Encoding": "gzip, deflate, br",
+        Accept: options.accept ?? DEFAULT_ACCEPT,
       },
     });
   } catch (error) {
@@ -240,14 +250,14 @@ export async function fetchLiquipediaText(
     await recordRequestCompleted();
   }
 
-  if (response.status === 429) throwRateLimit(options.purpose);
+  if (response.status === 429) throwRateLimit(response, options.purpose);
 
   if (
     response.status === 403 ||
     /verify you are human|challenges\.cloudflare\.com\/turnstile/i.test(text)
   ) {
     throw new LiquipediaError(
-      `Liquipedia がアクセスをブロックしました (HTTP ${response.status})。Cloudflare Turnstile を自動回避することはできません。`,
+      `Liquipedia がアクセスをブロックしました (HTTP ${response.status} ${response.statusText})。Cloudflare Turnstile を自動回避することはできません。`,
       "BLOCKED",
     );
   }
@@ -279,7 +289,7 @@ export async function fetchLiquipediaBinary(
       // キャンセル失敗は無視する
     }
     await recordRequestCompleted();
-    throwRateLimit(options.purpose);
+    throwRateLimit(response, options.purpose);
   }
 
   if (!response.ok) {

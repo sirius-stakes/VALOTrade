@@ -111,8 +111,11 @@ npm run start
 # DB を変更せず、取得・解析結果だけ確認
 npm run update:valo -- --dry-run --verbose
 
-# 24 時間キャッシュを無視して強制更新
+# ローカルキャッシュを無視して Liquipedia から強制再取得
 npm run update:valo -- --force
+
+# ローカルキャッシュだけで DB を再構築（外部通信なし・キャッシュが無いページはスキップ）
+npm run update:valo -- --offline
 
 # テスト用: 先頭 3 チームだけ取得（画像ダウンロードなし）
 npm run update:lol -- --limit 3
@@ -129,7 +132,8 @@ npm run update:lol -- --limit 3 --with-images
 | --- | --- |
 | `--dry-run` | DB へ書き込まず、取得・解析結果だけ表示 |
 | `--verbose` | 取得した全選手・警告を表示 |
-| `--force` | 24 時間キャッシュを無視して強制更新 |
+| `--force` | ローカルキャッシュと 24 時間 TTL を無視して Liquipedia から再取得（30 秒ウェイトは遵守） |
+| `--offline` | 外部通信を一切行わず、`data/liquipedia-cache/` のみから再パース（キャッシュが無いページはスキップ） |
 | `--debug` | API レスポンスを `scripts/.cache/` に保存 |
 | `--fixture=<path>` | ネットワーク取得の代わりにローカル HTML / JSON を解析 |
 | `--team=<name>` | 取得対象を 1 チームに絞る（チーム名 / 短縮名 / スラグ / Liquipedia ページ名） |
@@ -147,6 +151,31 @@ npm run update:lol -- --limit 3 --with-images
 - 画像が無い選手は UI 側のデフォルトアバターで安全に表示されます。
 - 画像もまとめて取得したい場合のみ `--with-images` を指定してください（画像 1 枚ごとにも 30 秒の共通ウェイトが入るため、時間がかかります）。
 
+### API 生データのローカルキャッシュ（オフライン再パース）
+
+Liquipedia API から取得に成功した JSON レスポンスは、`data/liquipedia-cache/<game>/<cache_key>.json` に自動保存されます。キャッシュには取得日時・用途・ページ名・リクエスト URL などのメタデータと、API の生 JSON がそのまま入ります。
+
+- 保存先は `data/liquipedia-cache/valorant/`、`data/liquipedia-cache/league-of-legends/`、`data/liquipedia-cache/identity-v/` です。
+- キャッシュは `.gitignore` で除外される自動生成物です（Git にはコミットされません）。
+- **既定実行（`npm run update:valo` / `update:lol` / `update:idv` / `update:standings`）** はキャッシュ優先です。キャッシュがあるページは外部 API へ通信せず、30 秒のレート制限待機もスキップして、ローカルファイルから即座にパース・DB 保存します（ログに `[CACHE HIT]` と表示）。
+- **`--force`** を指定したときだけキャッシュを無視し、Liquipedia から最新データを再取得してキャッシュを上書きします（30 秒ウェイトを遵守）。
+- **`--offline`** を指定すると外部通信を一切行いません。キャッシュが無いページはログに `[CACHE MISS]` を出してスキップするため、オフライン環境でも取得済みデータから DB を再構築できます。
+- 画像（ロゴ・顔写真）はキャッシュ対象外です。`--offline` 中は `--with-images` を指定してもダウンロードを行いません。
+
+```bash
+# 1) オンラインで一度取得（キャッシュ生成 + DB 更新）
+npm run update:valo
+
+# 2) DB を作り直したあと、キャッシュだけで高速に再構築
+npm run db:reset
+npm run update:valo -- --offline
+
+# 3) 最新データに更新したいときだけ --force
+npm run update:valo -- --force
+```
+
+> 既定実行はキャッシュを優先するため、キャッシュ生成後に新しい大会・チーム情報が追加されても自動では取りに行きません。最新化したい場合は `--force` を付けてください。
+
 ### Liquipedia API 運用上の注意事項
 
 TEAMTRADE は Liquipedia MediaWiki API を利用しています。以下の運用ルールを守ってください。
@@ -156,13 +185,19 @@ TEAMTRADE は Liquipedia MediaWiki API を利用しています。以下の運�
    - API か画像かを問わず、**直前のリクエスト完了から最低 30 秒** 経過するまで次のリクエストを送りません（`LIQUIPEDIA_DELAY_MS` で延ばせますが、30 秒未満にはできません）。
    - 直前のリクエスト時刻は `scripts/.cache/liquipedia-rate-limit.json` に保存されるため、`update:valo` の直後に `update:lol` を実行するなど**別プロセスの連続実行でも 30 秒の間隔を引き継ぎます**。
    - 総リクエスト数を抑えるため、既定では画像を取得しません（`--with-images` で有効化）。
-2. **24 時間キャッシュ**
-   - 同じチーム・同じ種別のページは 24 時間キャッシュします。短時間に同じデータを取り直したい場合は `--force` を付けてください。
+2. **ローカルファイルキャッシュ / 24 時間キャッシュ**
+   - API の生 JSON は `data/liquipedia-cache/` に保存され、既定実行ではローカルキャッシュを優先します（前述）。
+   - キャッシュが無いページは、同じチーム・同じ種別なら 24 時間 DB 更新をスキップします。短時間に同じデータを取り直したい場合は `--force` を付けてください。
 3. **429 Too Many Requests 発生時**
    - 429 を検知した時点で**リトライせず即座に以降の全通信を停止**し、取得済みのデータだけを DB に保存して終了します。
    - 同じ IP で再実行すると制限が長引くため、**数十分以上時間を置いてから** `--limit` を付けて少量ずつ再開してください。
-4. **カスタム User-Agent**
-   - すべてのリクエストに `User-Agent`（連絡先 URL 入り）と `Accept-Encoding: gzip` を付与しています。既定値は `TeamTradeEsportsDashboard/1.0 (https://github.com/sirius/TeamTrade; contact@example.com)` で、`LIQUIPEDIA_USER_AGENT` 環境変数で上書きできます。連絡先を含まない場合は実行を停止します。
+4. **必須リクエストヘッダー**
+   - すべてのリクエストに以下のヘッダーを付与しています（`scripts/lib/liquipedia-client.ts` で強制）。
+     - `User-Agent`: `TeamTrade/1.0 (https://github.com/sirius/TeamTrade; contact@teamtrade.local)`
+     - `Accept`: `application/json, text/plain, */*`（画像取得時は `image/*, */*`）
+     - `Accept-Encoding`: `gzip, deflate, br`
+   - User-Agent は `LIQUIPEDIA_USER_AGENT` 環境変数で上書きできます。連絡先を含まない場合は実行を停止します。
+   - 429 / 403 / 406 などのエラーは、実際の HTTP ステータスコードと statusText をログに表示して区別します。
 5. **Cloudflare Turnstile / captcha**
    - 自動回避は行いません。403 / captcha を検出した場合はブラウザで Liquipedia ページを開いてから、時間を置いて再実行してください。
 
@@ -197,7 +232,8 @@ scripts/
   update-standings.ts    # 公式順位表一括更新（npm run update:standings）
   lib/
     roster-parser.ts     # ロスター HTML パーサー（共通）
-    liquipedia-client.ts # Liquipedia 全通信の共通 30 秒リミッター / User-Agent / 429 即停止
+    liquipedia-client.ts # Liquipedia 全通信の共通 30 秒リミッター / 必須ヘッダー / 429 即停止
+    liquipedia-cache.ts  # API 生 JSON のローカルキャッシュ（--force / --offline 対応）
     standings-fetcher.ts # 順位表取得ロジック（共通）
 src/
   app/
@@ -241,6 +277,8 @@ src/
 public/
   logos/                 # 自動保存されるチームロゴ（Git 管理外）
   players/               # 自動保存される選手アバター（Git 管理外）
+data/
+  liquipedia-cache/      # API 生 JSON のローカルキャッシュ（自動生成物・Git 管理外）
 ```
 
 ## トラブルシューティング
